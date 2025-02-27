@@ -2,12 +2,18 @@ from sklearn.model_selection import train_test_split
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
+from sklearn.preprocessing import StandardScaler
+
 
 class CelebATabularDataset(Dataset):
     """Dataset class for the CelebA attributes dataset."""
-    def __init__(self, features, labels):
+    def __init__(self, features, labels, scaler=None):
         self.features = features
         self.labels = labels
+        self.scaler = scaler
+        
+        #if self.scaler is not None:
+           # self.features = pd.DataFrame(self.scaler.transform(self.features), columns=self.features.columns)
 
     def __len__(self):
         return len(self.features)
@@ -35,7 +41,7 @@ def get_celebA_train_testloader(train_config):
 
     # Load the data
     private_dataset = CelebATabularDataset.from_celebA(data_dir)
-
+    
     dataset_size = len(private_dataset)
     train_size = int(train_fraction * dataset_size)
     test_size = int(test_fraction * dataset_size)
@@ -43,8 +49,12 @@ def get_celebA_train_testloader(train_config):
     # Split the data into train and test sets stratified by the labels
     train_indices, test_indices = train_test_split(range(dataset_size), test_size=test_size, train_size=train_size)
 
-    train_subset = torch.utils.data.Subset(private_dataset, train_indices)
-    test_subset = torch.utils.data.Subset(private_dataset, test_indices)
+    scaler = StandardScaler()
+    train_features = private_dataset.features.iloc[train_indices]
+    scaler.fit(train_features)
+    
+    train_subset = CelebATabularDataset(private_dataset.features.iloc[train_indices], private_dataset.labels.iloc[train_indices], scaler=scaler)
+    test_subset = CelebATabularDataset(private_dataset.features.iloc[test_indices], private_dataset.labels.iloc[test_indices], scaler=scaler)
 
     train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_subset, batch_size=batch_size, shuffle=False)
