@@ -1,8 +1,8 @@
 import os
 import sys
 import yaml
-
-
+from sklearn.preprocessing import LabelEncoder
+import pickle
 
 # Path to the dataset zip file
 data_folder = "./data"
@@ -28,8 +28,24 @@ public_loader = get_celebA_publicloader(train_config)
 
 
 from examples.minv.celebA_attributes.utils.celebA_tabular_model2 import train_xgboost_model
-# Create the model and metadata
-train_acc, test_acc, train_loss, test_loss = train_xgboost_model(train_loader.dataset.dataset.features, train_loader.dataset.dataset.labels, test_loader.dataset.dataset.features, test_loader.dataset.dataset.labels, log_dir=train_config["run"]["log_dir"])
+le = LabelEncoder()
+le.fit(train_loader.dataset.labels)
+train_loader.dataset.labels = le.transform(train_loader.dataset.labels)
 
-print(f"Training Accuracy: {train_acc:.4f}, Training Loss (mlogloss): {train_loss:.4f}")
-print(f"Test Accuracy: {test_acc:.4f}, Test Loss (mlogloss): {test_loss:.4f}")
+# Create the model and metadata
+#train_acc, test_acc, train_loss = train_xgboost_model(train_loader.dataset.features, train_loader.dataset.labels, test_loader.dataset.features, test_loader.dataset.labels, log_dir=train_config["run"]["log_dir"])
+
+#print(f"Training Accuracy: {train_acc:.4f}, Training Loss (mlogloss): {train_loss:.4f}")
+
+# load the xgboost model
+import xgboost as xgb
+
+# Load the model from the .pkl file
+with open("target/xgboost_model.pkl", "rb") as f:
+    model = pickle.load(f)
+from sklearn.metrics import accuracy_score
+
+# Predict on the test data
+test_preds = model.predict(test_loader.dataset.features)
+test_acc = accuracy_score(test_loader.dataset.labels, test_preds)
+print(f"Test Accuracy: {test_acc:.4f}")
