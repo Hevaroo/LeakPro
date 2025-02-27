@@ -15,6 +15,7 @@ from leakpro.schemas import MIAMetaDataSchema, OptimizerConfig, LossConfig
 class ResNetTabular(nn.Module):
     def __init__(self, input_dim, hidden_dim=128, output_dim=1, num_blocks=3, dropout=0.1):
         super(ResNetTabular, self).__init__()
+        self.init_params = {"num_classes": output_dim, "input_dim": input_dim}
 
         self.input_layer = nn.Linear(input_dim, hidden_dim)
         
@@ -58,17 +59,17 @@ def create_trained_model_and_metadata(model,
 
     device_name = device("cuda" if cuda.is_available() else "cpu")
     model.to(device_name)
-    model.train()
-
+    
+    
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=lr, betas=(0.1, 0.9))
     train_losses, train_accuracies = [], []
     test_losses, test_accuracies = [], []
 
     for e in tqdm(range(epochs), desc="Training Progress"):
-        model.train()
         train_acc, train_loss = 0.0, 0.0
-
+        model.train()
+        
         for data, target in train_loader:
             data, target = data.to(device_name), target.to(device_name)
             optimizer.zero_grad()
@@ -104,6 +105,7 @@ def create_trained_model_and_metadata(model,
         test_acc = test_acc.double() / len(test_loader.dataset)
         test_losses.append(test_loss)
         test_accuracies.append(test_acc.item())
+        print(f"Epoch {e+1}/{epochs}: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}")
         
     # Move the model back to the CPU
     model.to("cpu")
@@ -141,7 +143,7 @@ def create_trained_model_and_metadata(model,
             test_acc=test_acc,
             train_loss=train_loss,
             test_loss=test_loss,
-            dataset="mimiciii"
+            dataset="celeba"
         )
 
     with open("target/model_metadata.pkl", "wb") as f:
