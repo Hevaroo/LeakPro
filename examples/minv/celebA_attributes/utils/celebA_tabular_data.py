@@ -13,18 +13,20 @@ class CelebATabularDataset(Dataset):
         return len(self.features)
 
     def __getitem__(self, idx):
-        return self.features.iloc[idx], self.labels.iloc[idx]
+        x = self.features.iloc[idx].values
+        y = self.labels.iloc[idx]
+        return torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.int64)
 
     @classmethod
     def from_celebA(cls, path):
-        # read data from plk file
+        # read data from pkl file
         df = pd.read_pickle(path)
         features = df.drop('identity', axis=1)
         labels = df['identity']
 
         return cls(features, labels)
 
-def get_celebA_test_train_loader(train_config):
+def get_celebA_train_testloader(train_config):
     """Get the train and test dataloaders for the CelebA dataset."""
     train_fraction = train_config["data"]["f_train"]
     test_fraction = train_config["data"]["f_test"]
@@ -39,7 +41,7 @@ def get_celebA_test_train_loader(train_config):
     test_size = int(test_fraction * dataset_size)
 
     # Split the data into train and test sets stratified by the labels
-    train_indices, test_indices = train_test_split(range(dataset_size), test_size=test_size, train_size=train_size, stratify=private_dataset.labels)
+    train_indices, test_indices = train_test_split(range(dataset_size), test_size=test_size, train_size=train_size)
 
     train_subset = torch.utils.data.Subset(private_dataset, train_indices)
     test_subset = torch.utils.data.Subset(private_dataset, test_indices)
@@ -49,7 +51,7 @@ def get_celebA_test_train_loader(train_config):
 
     return train_loader, test_loader
 
-def get_celebA_public_loader(train_config):
+def get_celebA_publicloader(train_config) -> DataLoader:
     """Get the public CelebA dataset."""
     batch_size = train_config["train"]["batch_size"]
     data_dir =  train_config["data"]["data_dir"] + "/public_df.pkl"
