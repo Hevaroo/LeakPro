@@ -4,6 +4,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from torch import cuda, device
+import os
+from torch.serialization import save
+import pickle
+from leakpro.schemas import MIAMetaDataSchema, OptimizerConfig, LossConfig
+
 
 
 
@@ -99,6 +104,48 @@ def create_trained_model_and_metadata(model,
         test_acc = test_acc.double() / len(test_loader.dataset)
         test_losses.append(test_loss)
         test_accuracies.append(test_acc.item())
+        
+    # Move the model back to the CPU
+    model.to("cpu")
+
+    os.makedirs(train_config["run"]["log_dir"], exist_ok=True)
+    with open( train_config["run"]["log_dir"]+"/target_model.pkl", "wb") as f:
+        save(model.state_dict(), f)
+
+    # Create metadata and store it
+    init_params = {}
+    for key, value in model.init_params.items():
+        init_params[key] = value
+    
+    optimizer_data = {
+        "name": optimizer.__class__.__name__.lower(),
+        "lr": optimizer.param_groups[0].get("lr", 0),
+        "weight_decay": optimizer.param_groups[0].get("weight_decay", 0),
+        "momentum": optimizer.param_groups[0].get("momentum", 0),
+        "dampening": optimizer.param_groups[0].get("dampening", 0),
+        "nesterov": optimizer.param_groups[0].get("nesterov", False)
+    }
+    
+    loss_data = {"name": criterion.__class__.__name__.lower()}
+    
+    meta_data = MIAMetaDataSchema(
+            train_indices=train_loader.dataset.indices,
+            test_indices=test_loader.dataset.indices,
+            num_train=len(train_loader.dataset.indices),
+            init_params=init_params,
+            optimizer=OptimizerConfig(**optimizer_data),
+            loss=LossConfig(**loss_data),
+            batch_size=train_loader.batch_size,
+            epochs=epochs,
+            train_acc=train_acc,
+            test_acc=test_acc,
+            train_loss=train_loss,
+            test_loss=test_loss,
+            dataset="mimiciii"
+        )
+
+    with open("target/model_metadata.pkl", "wb") as f:
+        pickle.dump(meta_data, f)
 
 
     return train_losses, train_accuracies, test_losses, test_accuracies

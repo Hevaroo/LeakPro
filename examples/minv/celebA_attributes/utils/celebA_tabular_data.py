@@ -22,7 +22,7 @@ class CelebATabularDataset(Dataset):
         # read data from pkl file
         df = pd.read_pickle(path)
         features = df.drop('identity', axis=1)
-        labels = df['identity']
+        labels = df['identity'] - 1
 
         return cls(features, labels)
 
