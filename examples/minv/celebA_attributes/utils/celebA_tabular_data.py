@@ -32,7 +32,7 @@ class CelebATabularDataset(Dataset):
 
         return cls(features, labels)
 
-def get_celebA_train_testloader(train_config):
+def get_celebA_train_testloader(train_config, random_state=42):
     """Get the train and test dataloaders for the CelebA dataset."""
     train_fraction = train_config["data"]["f_train"]
     test_fraction = train_config["data"]["f_test"]
@@ -47,7 +47,7 @@ def get_celebA_train_testloader(train_config):
     test_size = int(test_fraction * dataset_size)
 
     # Split the data into train and test sets stratified by the labels
-    train_indices, test_indices = train_test_split(range(dataset_size), test_size=test_size, train_size=train_size)
+    train_indices, test_indices = train_test_split(range(dataset_size), test_size=test_size, train_size=train_size, random_state = random_state)
 
     scaler = StandardScaler()
     train_features = private_dataset.features.iloc[train_indices]
