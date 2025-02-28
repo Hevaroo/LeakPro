@@ -4,6 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import pandas as pd
 import numpy as np
+from torch import cuda, device
 
 class CustomCTGAN(CTGAN):
     def __init__(self, 
@@ -43,7 +44,7 @@ class CustomCTGAN(CTGAN):
             discrete_columns (list): Column names for categorical variables.
             epochs (int): Number of training epochs.
         """
-        device = torch.device("cuda" if self.cuda else "cpu")
+        device = torch.device("cuda" if cuda else "cpu")
         self.target_model.to(device)
         opt_gen = optim.Adam(self.generator.parameters(), lr=self.generator_lr, weight_decay=self.generator_decay)
         opt_dis = optim.Adam(self.discriminator.parameters(), lr=self.discriminator_lr, weight_decay=self.discriminator_decay)

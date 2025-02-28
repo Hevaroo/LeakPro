@@ -22,7 +22,7 @@ path = os.path.join(os.getcwd(), train_config["data"]["data_dir"])
 
 #print(train_config)
 
-train_loader, test_loader = get_celebA_train_testloader(train_config)
+train_loader, test_loader = get_celebA_train_testloader(train_config, random_state=123)
 
 public_loader = get_celebA_publicloader(train_config)
 
@@ -33,7 +33,7 @@ le.fit(train_loader.dataset.labels)
 train_loader.dataset.labels = le.transform(train_loader.dataset.labels)
 
 # Create the model and metadata
-#train_acc, test_acc, train_loss = train_xgboost_model(train_loader.dataset.features, train_loader.dataset.labels, test_loader.dataset.features, test_loader.dataset.labels, log_dir=train_config["run"]["log_dir"])
+train_acc, test_acc, train_loss = train_xgboost_model(train_loader.dataset.features, train_loader.dataset.labels, test_loader.dataset.features, test_loader.dataset.labels, log_dir=train_config["run"]["log_dir"])
 
 #print(f"Training Accuracy: {train_acc:.4f}, Training Loss (mlogloss): {train_loss:.4f}")
 
