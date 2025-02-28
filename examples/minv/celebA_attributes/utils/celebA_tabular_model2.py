@@ -11,8 +11,8 @@ def train_xgboost_model(train_data, train_labels, test_data, test_labels, log_di
         "objective": "multi:softmax",  # Change to "multi:softmax" for multi-class
         "eval_metric": "mlogloss",
         "learning_rate": 0.1,
-        "max_depth": 9,
-        "n_estimators": 1000,
+        "max_depth": 8,
+        "n_estimators": 450,
         "subsample": 1.0,
         "colsample_bytree": 1.0,
         "reg_lambda": 1.0,
