@@ -33,7 +33,7 @@ le.fit(train_loader.dataset.labels)
 train_loader.dataset.labels = le.transform(train_loader.dataset.labels)
 
 # Create the model and metadata
-#train_acc, test_acc, train_loss = train_xgboost_model(train_loader.dataset.features, train_loader.dataset.labels, test_loader.dataset.features, test_loader.dataset.labels, log_dir=train_config["run"]["log_dir"])
+train_acc, test_acc, train_loss = train_xgboost_model(train_loader.dataset.features, train_loader.dataset.labels, test_loader.dataset.features, test_loader.dataset.labels, log_dir=train_config["run"]["log_dir"])
 
 #print(f"Training Accuracy: {train_acc:.4f}, Training Loss (mlogloss): {train_loss:.4f}")
 
