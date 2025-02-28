@@ -8,6 +8,7 @@ from leakpro.attacks.utils import gan_losses
 from leakpro.schemas import TrainingOutput
 import kornia
 import time
+from ctgan import CTGAN
 
 class CelebA_InputHandler(AbstractInputHandler):
     """Class to handle the user input for the CelebA dataset for plgmi attack."""
@@ -107,7 +108,7 @@ class CelebA_InputHandler(AbstractInputHandler):
                     log_interval: int,
                     sample_from_generator: callable
                   ) -> None:
-        """Train the GAN model. Inspired by cGAN from https://github.com/LetheSec/PLG-MI-Attack.
+        """Train the CTGAN model. Inspired by CTGAN from https://github.com/sdv-dev/CTGAN.
         
             Args:
                 pseudo_loader: DataLoader for the pseudo data.
@@ -128,85 +129,14 @@ class CelebA_InputHandler(AbstractInputHandler):
         """
         torch.set_default_device(device)
         torch.backends.cudnn.benchmark = True
-        gen_losses = []
-        dis_losses = []
-        inv_losses = []
-        
-        # Augmentations for generated images. TODO: Move this to a image modality extension and have it as an input
-        aug_list = kornia.augmentation.container.ImageSequential(
-            kornia.augmentation.RandomResizedCrop((64, 64), scale=(0.8, 1.0), ratio=(1.0, 1.0)),
-            kornia.augmentation.ColorJitter(brightness=0.2, contrast=0.2, p=0.5),
-            kornia.augmentation.RandomHorizontalFlip(),
-            kornia.augmentation.RandomRotation(5),
-        ).to(device)
 
         target_model.to(device)
         gen.to(device)
         dis.to(device)
-        # Training loop
-        for i in range(n_iter):
-            _l_g = .0
-            cumulative_inv_loss = 0.
-            cumulative_loss_dis = .0
-
-            cumulative_target_acc = .0
-            target_correct = 0
-            count = 0
-            
-            # Number of discriminator updates per generator update
-            for j in range(n_dis):
-                if j == 0:
-                    # Generator update
-                    fake, fake_labels, _ = sample_from_generator()
-                    fake_aug = aug_list(fake).to(device)
-                    dis_fake = dis(fake_aug, fake_labels)
-                    inv_loss = inv_criterion(target_model(fake_aug), fake_labels)
-
-                    inv_losses.append(inv_loss.item())
-                    dis_real = None
-
-                    loss_gen = gen_criterion(dis_fake, dis_real)
-                    gen_losses.append(loss_gen.item())
-                    loss_all = loss_gen + inv_loss*alpha
-
-                    gen.zero_grad()
-                    loss_all.backward()
-                    opt_gen.step()
-                    _l_g += loss_gen.item()
-                    cumulative_inv_loss += inv_loss.item()
-                
-                # Discriminator update
-                fake, fake_labels, _ = sample_from_generator()
-
-                real, real_labels = next(iter(pseudo_loader))
-                real, real_labels = real.to(device), real_labels.to(device)
-
-                dis_fake = dis(fake, fake_labels)
-                dis_real = dis(real, real_labels)
-
-                loss_dis = dis_criterion(dis_fake, dis_real)
-            
-                dis.zero_grad()
-            
-                loss_dis.backward()
-                opt_dis.step()
-
-                cumulative_loss_dis += loss_dis.item()
-                dis_losses.append(cumulative_loss_dis/n_dis)
-                
-                # Evaluate target model accuracy for training progress monitoring TODO: make optional for efficiency
-                with torch.no_grad():
-                    count += fake.shape[0]
-                    T_logits = target_model(fake)
-                    T_preds = T_logits.max(1, keepdim=True)[1]
-                    target_correct += T_preds.eq(fake_labels.view_as(T_preds)).sum().item()
-                    cumulative_target_acc += round(target_correct / count, 4)
-
-            if i % log_interval == 0:
-                print(
-                        'iteration: {:05d}/{:05d}, loss gen: {:05f}, loss dis {:05f}, inv loss {:05f}, target acc {:04f}, time {}'.format(
-                            i, n_iter, _l_g, cumulative_loss_dis / n_dis, cumulative_inv_loss,
-                            cumulative_target_acc / n_dis, time.strftime("%H:%M:%S")))
-
-        torch.save(gen.state_dict(), './gen.pth')
-        torch.save(dis.state_dict(), './dis.pth')
+        
+        ctgan = CTGAN(epochs=n_iter, verbose=True)
+        # ctgan takes dataframe or numpy array as input
+        ctgan.fit(pseudo_loader.dataset, discrete_columns=pseudo_loader.dataset.columns)
+        ctgan.save('ctgan.pth')
+        
+        ctgan.sample(1000)
