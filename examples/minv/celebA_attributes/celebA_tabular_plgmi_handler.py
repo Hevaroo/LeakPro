@@ -8,7 +8,7 @@ from leakpro.attacks.utils import gan_losses
 from leakpro.schemas import TrainingOutput
 import kornia
 import time
-from ctgan import CTGAN
+from examples.minv.celebA_attributes.utils.CTGAN_extended import CustomCTGAN
 import pandas as pd
 
 class CelebA_InputHandler(AbstractInputHandler):
@@ -135,7 +135,7 @@ class CelebA_InputHandler(AbstractInputHandler):
         gen.to(device)
         dis.to(device)
         
-        ctgan = CTGAN(epochs=n_iter, verbose=True)
+        ctgan = CustomCTGAN(epochs=n_iter, verbose=True)
         # ctgan takes dataframe or numpy array as input
         ctgan.fit(pseudo_loader.dataset, discrete_columns=pseudo_loader.dataset.columns)
         ctgan.save('ctgan.pth')
