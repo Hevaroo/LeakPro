@@ -142,30 +142,5 @@ class CelebA_InputHandler(AbstractInputHandler):
         
         ctgan.sample(1000)
 
-def get_discrete_columns(dataset: pd.DataFrame) -> list:
-    """
-    Extract the discrete columns from the dataset.
-    
-    A discrete column is identified as:
-    - Having an integer or categorical data type.
-    - Or having a relatively small number of unique values compared to the dataset size.
-
-    Args:
-        dataset (pd.DataFrame): The input DataFrame.
-
-    Returns:
-        list: A list of discrete column names.
-    """
-    discrete_columns = []
-    threshold = 20  # Threshold for unique values to classify as discrete
-
-    for col in dataset.columns:
-        if dataset[col].dtype in ['int64', 'int32', 'category']:
-            discrete_columns.append(col)
-        elif dataset[col].nunique() <= threshold:
-            discrete_columns.append(col)
-
-    return discrete_columns
-
     
     

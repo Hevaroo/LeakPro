@@ -26,45 +26,39 @@ class CustomCTGAN(CTGAN):
                  verbose=False, 
                  epochs=300, 
                  pac=10, 
-                 cuda=True,
-                 target_model=None, 
-                 inv_criterion=None, 
-                 alpha=1.0):
+                 cuda=True):
         
         super().__init__(embedding_dim, generator_dim, discriminator_dim, 
                          generator_lr, generator_decay, discriminator_lr, 
                          discriminator_decay, batch_size, discriminator_steps, 
                          log_frequency, verbose, epochs, pac, cuda)
-        
-        self.target_model = target_model
-        self.inv_criterion = inv_criterion  # Invariance loss function
-        self.alpha = alpha
 
-    def fit(self, train_data, discrete_columns=(), epochs=None):
-        """Fit the CTGAN Synthesizer models to the training data.
+    def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, alpha = 0.1, discrete_columns=()):
+        """
+        Fit the CTGAN model to the training data using pseudo-labeled guidance as in the PLG-MI attack.
 
         Args:
-            train_data (numpy.ndarray or pandas.DataFrame):
-                Training Data. It must be a 2-dimensional numpy array or a pandas.DataFrame.
-            discrete_columns (list-like):
-                List of discrete columns to be used to generate the Conditional
-                Vector. If ``train_data`` is a Numpy array, this list should
-                contain the integer indices of the columns. Otherwise, if it is
-                a ``pandas.DataFrame``, this list should contain the column names.
+            train_data (pandas.DataFrame):
+                Training data.
+            target_model (torch.nn.Module):
+                Target model.
+            num_classes (int):
+                Number of classes.
+            inv_criterion (callable):
+                Inversion criterion.
+            gen_criterion (callable):
+                Generator criterion.
+            dis_criterion (callable):
+                Discriminator criterion.
+            alpha (float):
+                Alpha value for the inversion loss.
+            discrete_columns (list of str):
+                List of column names that are discrete.
         """
+
+        epochs = self._epochs
         self._validate_discrete_columns(train_data, discrete_columns)
         self._validate_null_data(train_data, discrete_columns)
-
-        if epochs is None:
-            epochs = self._epochs
-        else:
-            warnings.warn(
-                (
-                    '`epochs` argument in `fit` method has been deprecated and will be removed '
-                    'in a future version. Please pass `epochs` to the constructor instead'
-                ),
-                DeprecationWarning,
-            )
 
         self._transformer = DataTransformer()
         self._transformer.fit(train_data, discrete_columns)
@@ -102,12 +96,12 @@ class CustomCTGAN(CTGAN):
         mean = torch.zeros(self._batch_size, self._embedding_dim, device=self._device)
         std = mean + 1
 
-        self.loss_values = pd.DataFrame(columns=['Epoch', 'Generator Loss', 'Distriminator Loss'])
+        self.loss_values = pd.DataFrame(columns=['Epoch', 'Generator Loss', 'Distriminator Loss', 'Inversion Loss'])
 
         epoch_iterator = tqdm(range(epochs), disable=(not self._verbose))
         if self._verbose:
-            description = 'Gen. ({gen:.2f}) | Discrim. ({dis:.2f})'
-            epoch_iterator.set_description(description.format(gen=0, dis=0))
+            description = 'Gen. ({gen:.2f}) | Discrim. ({dis:.2f}) | Inv. ({inv:.2f})'
+            epoch_iterator.set_description(description.format(gen=0, dis=0, inv=0))
 
         steps_per_epoch = max(len(train_data) // self._batch_size, 1)
         for i in epoch_iterator:
@@ -115,6 +109,7 @@ class CustomCTGAN(CTGAN):
                 for n in range(self._discriminator_steps):
                     fakez = torch.normal(mean=mean, std=std)
 
+                    """
                     condvec = self._data_sampler.sample_condvec(self._batch_size)
                     if condvec is None:
                         c1, m1, col, opt = None, None, None, None
@@ -133,18 +128,23 @@ class CustomCTGAN(CTGAN):
                             train_data, self._batch_size, col[perm], opt[perm]
                         )
                         c2 = c1[perm]
+                    """
+                    c1 = torch.randint(0, num_classes, (self._batch_size,), device=self._device)
+                    fakez = torch.cat([fakez, c1], dim=1)
+
+                    real = self._data_sampler.sample_data(train_data, self._batch_size)
+                    
 
                     fake = self._generator(fakez)
                     fakeact = self._apply_activate(fake)
 
                     real = torch.from_numpy(real.astype('float32')).to(self._device)
 
-                    if c1 is not None:
-                        fake_cat = torch.cat([fakeact, c1], dim=1)
-                        real_cat = torch.cat([real, c2], dim=1)
-                    else:
-                        real_cat = real
-                        fake_cat = fakeact
+                    #if c1 is not None:
+                    #    fake_cat = torch.cat([fakeact, c1], dim=1)
+                    #else:
+                    real_cat = real
+                    fake_cat = fakeact
 
                     y_fake = discriminator(fake_cat)
                     y_real = discriminator(real_cat)
@@ -152,6 +152,7 @@ class CustomCTGAN(CTGAN):
                     pen = discriminator.calc_gradient_penalty(
                         real_cat, fake_cat, self._device, self.pac
                     )
+                    # TODO: Maybe change this loss
                     loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
 
                     optimizerD.zero_grad(set_to_none=False)
@@ -161,7 +162,7 @@ class CustomCTGAN(CTGAN):
 
                 fakez = torch.normal(mean=mean, std=std)
                 condvec = self._data_sampler.sample_condvec(self._batch_size)
-
+                """
                 if condvec is None:
                     c1, m1, col, opt = None, None, None, None
                 else:
@@ -169,33 +170,46 @@ class CustomCTGAN(CTGAN):
                     c1 = torch.from_numpy(c1).to(self._device)
                     m1 = torch.from_numpy(m1).to(self._device)
                     fakez = torch.cat([fakez, c1], dim=1)
+                """
+                c1 = torch.randint(0, num_classes, (self._batch_size,), device=self._device)
+                fakez = torch.cat([fakez, c1], dim=1)
+
 
                 fake = self._generator(fakez)
                 fakeact = self._apply_activate(fake)
 
-                if c1 is not None:
-                    y_fake = discriminator(torch.cat([fakeact, c1], dim=1))
-                else:
-                    y_fake = discriminator(fakeact)
+                #if c1 is not None:
+                #    y_fake = discriminator(torch.cat([fakeact, c1], dim=1))
+                #else:
+                y_fake = discriminator(fakeact)
+
+                # Pseudo label batch is last column of fakeact
+                pseudo_label_batch = fakeact[:, -1].long()
+
+                # Fake feature vector is all but last column of fakeact
+                fakefeat = fakeact[:, :-1]
 
                 if condvec is None:
-                    cross_entropy = 0
+                    inv_loss = 0
                 else:
-                    cross_entropy = self._cond_loss(fake, c1, m1)
+                    inv_loss  = inv_criterion(target_model(fakefeat), pseudo_label_batch)
 
-                loss_g = -torch.mean(y_fake) + cross_entropy
+                loss_g = gen_criterion(y_fake)
+                loss_all = loss_g + inv_loss*alpha
 
                 optimizerG.zero_grad(set_to_none=False)
-                loss_g.backward()
+                loss_all.backward()
                 optimizerG.step()
 
             generator_loss = loss_g.detach().cpu().item()
             discriminator_loss = loss_d.detach().cpu().item()
+            inversion_loss = inv_loss.detach().cpu().item()
 
             epoch_loss_df = pd.DataFrame({
                 'Epoch': [i],
                 'Generator Loss': [generator_loss],
                 'Discriminator Loss': [discriminator_loss],
+                'Inversion Loss': [inversion_loss]
             })
             if not self.loss_values.empty:
                 self.loss_values = pd.concat([self.loss_values, epoch_loss_df]).reset_index(
