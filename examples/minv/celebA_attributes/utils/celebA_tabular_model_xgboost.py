@@ -4,6 +4,33 @@ import os
 import numpy as np
 from sklearn.metrics import accuracy_score, log_loss
 import torch
+from leakpro.schemas import MIAMetaDataSchema, OptimizerConfig, LossConfig
+
+class xgboost_model(xgb.XGBClassifier):
+    def __init__(self):
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        params = {
+        "objective": "multi:softmax",  # Change to "multi:softmax" for multi-class
+        "eval_metric": "mlogloss",
+        "learning_rate": 0.1,
+        "max_depth": 6,
+        "n_estimators": 10,
+        "subsample": 0.5,
+        "colsample_bytree": 1.0,
+        "reg_lambda": 1.0,
+        "reg_alpha": 0.0,
+        "random_state": 42,
+        "tree_method": "hist",
+        "device": device
+        }
+
+        super().__init__(**params)
+
+    def load_state_dict(self, state_dict):
+        pass
+
+
 
 def train_xgboost_model(train_data, train_labels, test_data, test_labels, log_dir="logs"):
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -12,7 +39,7 @@ def train_xgboost_model(train_data, train_labels, test_data, test_labels, log_di
         "eval_metric": "mlogloss",
         "learning_rate": 0.1,
         "max_depth": 6,
-        "n_estimators": 10,
+        "n_estimators": 2,
         "subsample": 0.5,
         "colsample_bytree": 1.0,
         "reg_lambda": 1.0,
@@ -39,22 +66,40 @@ def train_xgboost_model(train_data, train_labels, test_data, test_labels, log_di
     
     # Save model
     os.makedirs(log_dir, exist_ok=True)
-    model_save_path = os.path.join(log_dir, "xgboost_model.pkl")
+    model_save_path = os.path.join(log_dir, "target_model.pkl")
     with open(model_save_path, "wb") as f:
         pickle.dump(model, f)
     
-    # Metadata
-    meta_data = {
-        "num_train": len(train_data),
-        "num_test": len(test_data),
-        "parameters": params,
-        "train_accuracy": train_acc,
-        "test_accuracy": test_acc,
-        "train_loss": train_loss,
-        #"test_loss": test_loss
+    optimizer_data = {
+        "name": "0",
+        "lr": 0,
+        "weight_decay": 0,
+        "momentum": 0,
+        "dampening": 0,
+        "nesterov": False
     }
-    
-    with open(os.path.join(log_dir, "xgboost_metadata.pkl"), "wb") as f:
+    loss_data = {
+        "name": "0"
+    }
+
+    # Metadata
+    meta_data = MIAMetaDataSchema(
+            train_indices=[0],
+            test_indices=[0],
+            num_train=0,
+            init_params={},
+            optimizer=OptimizerConfig(**optimizer_data),
+            loss=LossConfig(**loss_data),
+            batch_size=1,
+            epochs=1,
+            train_acc=train_acc,
+            test_acc=test_acc,
+            train_loss=train_loss,
+            test_loss=0,
+            dataset="celebA_attributes"
+        )
+
+    with open("target/model_metadata.pkl", "wb") as f:
         pickle.dump(meta_data, f)
     
     return train_acc, test_acc, train_loss #, test_loss

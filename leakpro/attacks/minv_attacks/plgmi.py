@@ -1,6 +1,7 @@
 """Implementation of the PLGMI attack."""
 from typing import Any, Dict, Optional
 
+import pandas as pd
 import torch
 from kornia import augmentation
 from pydantic import BaseModel, Field
@@ -117,9 +118,9 @@ class AttackPLGMI(AbstractMINV):
         logger.info("Performing top-n selection for pseudo labels")
         self.target_model.eval()
         all_confidences = []
-        for images, _ in self.public_dataloader:
+        for entry, _ in self.public_dataloader:
             with torch.no_grad():
-                outputs = self.target_model(images)
+                outputs = self.target_model(entry)
                 confidences = F.softmax(outputs, dim=1)
                 all_confidences.append(confidences)
         # Concatenate all confidences
@@ -149,11 +150,12 @@ class AttackPLGMI(AbstractMINV):
             for index, _ in top_n_pseudo_map[i]:
                 # Append the image and pseudo label (index i) to the pseudo data
                 pseudo_data.append((self.public_dataloader.dataset[index][0], i))
-
+        pseudo_df = pd.DataFrame(pseudo_data)
         logger.info("Created pseudo dataloader")
-        # pseudo_data is now a list of tuples (image, pseudo_label)
+        # pseudo_data is now a list of tuples (entry, pseudo_label)
         # We want to set the default device to the sampler in the returned dataloader to be on device
-        return DataLoader(pseudo_data, batch_size=self.batch_size, shuffle=True, generator=torch.Generator(device=self.device))
+
+        return DataLoader(pseudo_df, batch_size=self.batch_size, shuffle=True, generator=torch.Generator(device=self.device))
 
 
     def prepare_attack(self:Self) -> None:
@@ -185,6 +187,8 @@ class AttackPLGMI(AbstractMINV):
             logger.info("GAN not trained, getting psuedo labels")
             # Top-n-selection to get pseudo labels
             self.pseudo_loader = self.top_n_selection()
+            print(self.pseudo_loader.dataset.head())
+
             logger.info("Training the GAN")
             # TODO: Change this input structure to just pass the attack class
             self.handler.train_gan(pseudo_loader = self.pseudo_loader,

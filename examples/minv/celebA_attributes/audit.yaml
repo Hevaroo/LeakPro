@@ -43,12 +43,12 @@ audit:  # Configurations for auditing
 
   output_dir: "./leakpro_output"
   attack_type: "minv" #mia, gia
-  modality: "image" #image, tabular
+  data_modality: "tabular" #image, tabular
 
 target:
   # Target model path
-  module_path: "../../mia/celebA_HQ/utils/celeb_hq_model.py"
-  model_class: "ResNet18" 
+  module_path: "./utils/celebA_tabular_model_xgboost.py"
+  model_class: "xgboost_model"
   # Data paths
   target_folder: "./target"
   data_path: "./data/celebA_private_data.pkl"
