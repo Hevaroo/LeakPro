@@ -1,9 +1,14 @@
 from ctgan import CTGAN
+from ctgan.synthesizers.base import DataTransformer, DataSampler, Generator, Discriminator
+from ctgan.data_sampler import DataSampler
+from ctgan.data_transformer import DataTransformer
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
 import pandas as pd
 import numpy as np
+import warnings
+from tqdm import tqdm
 from torch import cuda, device
 
 class CustomCTGAN(CTGAN):
@@ -35,100 +40,173 @@ class CustomCTGAN(CTGAN):
         self.inv_criterion = inv_criterion  # Invariance loss function
         self.alpha = alpha
 
-    def train(self, data: pd.DataFrame, pseudo_labels: torch.Tensor, discrete_columns: list, epochs=None):
-        """Train the CTGAN model using a PLG-MI-like attack setup.
-        
-        Args:
-            data (pd.DataFrame): Data to train the model on.
-            pseudo_labels (torch.Tensor): Pseudo-labels for each sample.
-            discrete_columns (list): Column names for categorical variables.
-            epochs (int): Number of training epochs.
-        """
-        device = torch.device("cuda" if cuda else "cpu")
-        self.target_model.to(device)
-        opt_gen = optim.Adam(self.generator.parameters(), lr=self.generator_lr, weight_decay=self.generator_decay)
-        opt_dis = optim.Adam(self.discriminator.parameters(), lr=self.discriminator_lr, weight_decay=self.discriminator_decay)
-
-        for epoch in range(epochs or self.epochs):
-            for _ in range(self.discriminator_steps):
-                # Sample real data
-                idx = torch.randint(0, len(data), (self.batch_size,))
-                real = torch.tensor(data.iloc[idx].values, dtype=torch.float32, device=device)
-                real_labels = pseudo_labels[idx].to(device)
-
-                # Generate fake data
-                noise = torch.randn((self.batch_size, self.embedding_dim), device=device)
-                fake_data = self.generator(noise)
-
-                # Decode generated tabular data properly
-                fake_df = self._decode(fake_data, discrete_columns)
-                fake_df_tensor = torch.tensor(fake_df.values, dtype=torch.float32, device=device)
-
-                # Assign pseudo-labels for the generated data
-                fake_labels = torch.randint(0, real_labels.max() + 1, (self.batch_size,), device=device)
-
-                # Compute discriminator outputs
-                dis_real = self.discriminator(real)
-                dis_fake = self.discriminator(fake_df_tensor)  # Use processed fake data
-
-                # Discriminator loss
-                loss_dis = F.binary_cross_entropy_with_logits(dis_real, torch.ones_like(dis_real)) + \
-                           F.binary_cross_entropy_with_logits(dis_fake, torch.zeros_like(dis_fake))
-
-                self.discriminator.zero_grad()
-                loss_dis.backward()
-                opt_dis.step()
-
-            # Generator update
-            fake_data = self.generator(noise)
-            fake_df = self._decode(fake_data, discrete_columns)
-            fake_df_tensor = torch.tensor(fake_df.values, dtype=torch.float32, device=device)
-
-            dis_fake = self.discriminator(fake_df_tensor)
-
-            # Compute invariance loss (ensuring generated samples match the target model’s feature space)
-            inv_loss = self.inv_criterion(self.target_model(fake_df_tensor), fake_labels)
-
-            # Generator loss
-            loss_gen = F.binary_cross_entropy_with_logits(dis_fake, torch.ones_like(dis_fake))
-            loss_total = loss_gen + self.alpha * inv_loss
-
-            self.generator.zero_grad()
-            loss_total.backward()
-            opt_gen.step()
-
-            if epoch % 10 == 0:
-                print(f"Epoch {epoch}, Gen Loss: {loss_gen.item():.4f}, Dis Loss: {loss_dis.item():.4f}, Inv Loss: {inv_loss.item():.4f}")
-
-        print("Training complete!")
-
-    def _decode(self, fake_data, discrete_columns, category_mappings):
-        """Convert the generated numerical data back into categorical format using proper category mappings.
+    def fit(self, train_data, discrete_columns=(), epochs=None):
+        """Fit the CTGAN Synthesizer models to the training data.
 
         Args:
-            fake_data (torch.Tensor): Generated tabular data.
-            discrete_columns (list): Names of categorical columns.
-            category_mappings (dict): Mapping of categorical column names to their original categories.
-
-        Returns:
-            pd.DataFrame: Properly formatted tabular data.
+            train_data (numpy.ndarray or pandas.DataFrame):
+                Training Data. It must be a 2-dimensional numpy array or a pandas.DataFrame.
+            discrete_columns (list-like):
+                List of discrete columns to be used to generate the Conditional
+                Vector. If ``train_data`` is a Numpy array, this list should
+                contain the integer indices of the columns. Otherwise, if it is
+                a ``pandas.DataFrame``, this list should contain the column names.
         """
-        fake_df = pd.DataFrame(fake_data.cpu().detach().numpy())
+        self._validate_discrete_columns(train_data, discrete_columns)
+        self._validate_null_data(train_data, discrete_columns)
 
-        for col in discrete_columns:
-            col_idx = fake_df.columns.get_loc(col)  # Get column index
-            num_categories = len(category_mappings[col])
+        if epochs is None:
+            epochs = self._epochs
+        else:
+            warnings.warn(
+                (
+                    '`epochs` argument in `fit` method has been deprecated and will be removed '
+                    'in a future version. Please pass `epochs` to the constructor instead'
+                ),
+                DeprecationWarning,
+            )
 
-            # Apply softmax over the categorical dimension
-            logits = fake_df.iloc[:, col_idx : col_idx + num_categories].values
-            probs = np.exp(logits) / np.exp(logits).sum(axis=1, keepdims=True)  # Softmax
-            category_indices = np.argmax(probs, axis=1)  # Get the highest probability category
+        self._transformer = DataTransformer()
+        self._transformer.fit(train_data, discrete_columns)
 
-            # Map back to original categories
-            fake_df[col] = [category_mappings[col][i] for i in category_indices]
+        train_data = self._transformer.transform(train_data)
 
-            # Drop additional softmax-generated columns
-            fake_df.drop(columns=fake_df.columns[col_idx : col_idx + num_categories], inplace=True)
+        self._data_sampler = DataSampler(
+            train_data, self._transformer.output_info_list, self._log_frequency
+        )
 
-        return fake_df
+        data_dim = self._transformer.output_dimensions
+
+        self._generator = Generator(
+            self._embedding_dim + self._data_sampler.dim_cond_vec(), self._generator_dim, data_dim
+        ).to(self._device)
+
+        discriminator = Discriminator(
+            data_dim + self._data_sampler.dim_cond_vec(), self._discriminator_dim, pac=self.pac
+        ).to(self._device)
+
+        optimizerG = optim.Adam(
+            self._generator.parameters(),
+            lr=self._generator_lr,
+            betas=(0.5, 0.9),
+            weight_decay=self._generator_decay,
+        )
+
+        optimizerD = optim.Adam(
+            discriminator.parameters(),
+            lr=self._discriminator_lr,
+            betas=(0.5, 0.9),
+            weight_decay=self._discriminator_decay,
+        )
+
+        mean = torch.zeros(self._batch_size, self._embedding_dim, device=self._device)
+        std = mean + 1
+
+        self.loss_values = pd.DataFrame(columns=['Epoch', 'Generator Loss', 'Distriminator Loss'])
+
+        epoch_iterator = tqdm(range(epochs), disable=(not self._verbose))
+        if self._verbose:
+            description = 'Gen. ({gen:.2f}) | Discrim. ({dis:.2f})'
+            epoch_iterator.set_description(description.format(gen=0, dis=0))
+
+        steps_per_epoch = max(len(train_data) // self._batch_size, 1)
+        for i in epoch_iterator:
+            for id_ in range(steps_per_epoch):
+                for n in range(self._discriminator_steps):
+                    fakez = torch.normal(mean=mean, std=std)
+
+                    condvec = self._data_sampler.sample_condvec(self._batch_size)
+                    if condvec is None:
+                        c1, m1, col, opt = None, None, None, None
+                        real = self._data_sampler.sample_data(
+                            train_data, self._batch_size, col, opt
+                        )
+                    else:
+                        c1, m1, col, opt = condvec
+                        c1 = torch.from_numpy(c1).to(self._device)
+                        m1 = torch.from_numpy(m1).to(self._device)
+                        fakez = torch.cat([fakez, c1], dim=1)
+
+                        perm = np.arange(self._batch_size)
+                        np.random.shuffle(perm)
+                        real = self._data_sampler.sample_data(
+                            train_data, self._batch_size, col[perm], opt[perm]
+                        )
+                        c2 = c1[perm]
+
+                    fake = self._generator(fakez)
+                    fakeact = self._apply_activate(fake)
+
+                    real = torch.from_numpy(real.astype('float32')).to(self._device)
+
+                    if c1 is not None:
+                        fake_cat = torch.cat([fakeact, c1], dim=1)
+                        real_cat = torch.cat([real, c2], dim=1)
+                    else:
+                        real_cat = real
+                        fake_cat = fakeact
+
+                    y_fake = discriminator(fake_cat)
+                    y_real = discriminator(real_cat)
+
+                    pen = discriminator.calc_gradient_penalty(
+                        real_cat, fake_cat, self._device, self.pac
+                    )
+                    loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
+
+                    optimizerD.zero_grad(set_to_none=False)
+                    pen.backward(retain_graph=True)
+                    loss_d.backward()
+                    optimizerD.step()
+
+                fakez = torch.normal(mean=mean, std=std)
+                condvec = self._data_sampler.sample_condvec(self._batch_size)
+
+                if condvec is None:
+                    c1, m1, col, opt = None, None, None, None
+                else:
+                    c1, m1, col, opt = condvec
+                    c1 = torch.from_numpy(c1).to(self._device)
+                    m1 = torch.from_numpy(m1).to(self._device)
+                    fakez = torch.cat([fakez, c1], dim=1)
+
+                fake = self._generator(fakez)
+                fakeact = self._apply_activate(fake)
+
+                if c1 is not None:
+                    y_fake = discriminator(torch.cat([fakeact, c1], dim=1))
+                else:
+                    y_fake = discriminator(fakeact)
+
+                if condvec is None:
+                    cross_entropy = 0
+                else:
+                    cross_entropy = self._cond_loss(fake, c1, m1)
+
+                loss_g = -torch.mean(y_fake) + cross_entropy
+
+                optimizerG.zero_grad(set_to_none=False)
+                loss_g.backward()
+                optimizerG.step()
+
+            generator_loss = loss_g.detach().cpu().item()
+            discriminator_loss = loss_d.detach().cpu().item()
+
+            epoch_loss_df = pd.DataFrame({
+                'Epoch': [i],
+                'Generator Loss': [generator_loss],
+                'Discriminator Loss': [discriminator_loss],
+            })
+            if not self.loss_values.empty:
+                self.loss_values = pd.concat([self.loss_values, epoch_loss_df]).reset_index(
+                    drop=True
+                )
+            else:
+                self.loss_values = epoch_loss_df
+
+            if self._verbose:
+                epoch_iterator.set_description(
+                    description.format(gen=generator_loss, dis=discriminator_loss)
+                )
+
 
