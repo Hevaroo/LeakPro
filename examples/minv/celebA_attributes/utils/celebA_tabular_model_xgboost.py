@@ -30,26 +30,16 @@ class xgboost_model(xgb.XGBClassifier):
     def load_state_dict(self, state_dict):
         pass
 
+    def eval(self):
+        pass
+
 
 
 def train_xgboost_model(train_data, train_labels, test_data, test_labels, log_dir="logs"):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    params = {
-        "objective": "multi:softmax",  # Change to "multi:softmax" for multi-class
-        "eval_metric": "mlogloss",
-        "learning_rate": 0.1,
-        "max_depth": 6,
-        "n_estimators": 2,
-        "subsample": 0.5,
-        "colsample_bytree": 1.0,
-        "reg_lambda": 1.0,
-        "reg_alpha": 0.0,
-        "random_state": 42,
-        "tree_method": "hist",
-        "device": device
-    }
+    
 
-    model = xgb.XGBClassifier(**params)
+    model = xgboost_model()
     model.fit(train_data, train_labels, eval_set=[(train_data, train_labels)],verbose=True)
 
     # Predictions

@@ -72,7 +72,7 @@ class TargetConfig(BaseModel):
     target_folder: str = Field(..., description="Directory where target model data is stored")
     data_path: str = Field(..., description="Path to dataset file")
     # TODO: Change data_path description to be more descriptive, i.e path to target (or private) dataset.
-
+    model_type: Optional[Literal["torch", "xgboost"]] = Field("torch", description="Type of model: torch or xgboost")
     # MINV-specific field - optional
     public_data_path: Optional[str] = Field(None, description="Path to the public dataset used for model inversion")
 

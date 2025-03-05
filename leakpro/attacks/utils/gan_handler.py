@@ -87,3 +87,12 @@ class GANHandler(GeneratorHandler):
     def save_discriminator(self, discriminator: Module, path: str) -> None:
         """Save the discriminator model."""
         torch.save(discriminator.state_dict(), path)
+
+class CTGANHandler(GeneratorHandler):
+    """Handler for training and managing GANs."""
+
+    def __init__(self: Self, handler: MINVHandler, configs: dict) -> None:
+        """Initialize the GANHandler class."""
+        logger.info("Initializing CTGANHandler...")
+        super().__init__(handler, configs=configs, caller="gan_handler")
+        self.discriminator = None

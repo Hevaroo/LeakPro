@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from leakpro.attacks.minv_attacks.abstract_minv import AbstractMINV
 from leakpro.attacks.utils import gan_losses
-from leakpro.attacks.utils.gan_handler import GANHandler
+from leakpro.attacks.utils.gan_handler import CTGANHandler, GANHandler
 from leakpro.input_handler.minv_handler import MINVHandler
 from leakpro.input_handler.modality_extensions.image_metrics import ImageMetrics
 from leakpro.metrics.attack_result import MinvResult
@@ -56,7 +56,7 @@ class AttackPLGMI(AbstractMINV):
 
         # Model parameters
         generator: GANConfig = Field(..., description="Configuration for the generator")
-        discriminator: GANConfig = Field(..., description="Configuration for the discriminator")
+        discriminator: Optional[GANConfig] = Field(..., description="Configuration for the discriminator")
 
         # Latent space parameters
         dim_z: int = Field(128, ge=1, description="Dimension of the latent space")
@@ -164,23 +164,28 @@ class AttackPLGMI(AbstractMINV):
 
         # Get the target model from the handler
         self.target_model = self.handler.target_model
+        tabular = True
+        if tabular:
+            self.gan_handler = CTGANHandler(self.handler, configs=self.configs)
+            self.discriminator = None
+        else:
+            self.gan_handler = GANHandler(self.handler, configs=self.configs)
 
-        self.gan_handler = GANHandler(self.handler, configs=self.configs)
+            # Get the discriminator
+            self.discriminator = self.gan_handler.get_discriminator()
+            # Set Adam optimizer for both generator and discriminator
+            self.gen_optimizer = torch.optim.Adam(self.generator.parameters(), lr=self.gen_lr,
+                                                betas=(self.gen_beta1, self.gen_beta2))
+            self.dis_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=self.dis_lr,
+                                                betas=(self.dis_beta1, self.dis_beta2))
+
         # TODO: Change structure of how we load data, handler or model_handler should do this, not gan_handler
         # Get public dataloader
         self.public_dataloader = self.handler.get_public_dataloader(self.configs.batch_size)
 
-        # Get discriminator
-        self.discriminator = self.gan_handler.get_discriminator()
-
         # Get generator
         self.generator = self.gan_handler.get_generator()
 
-        # Set Adam optimizer for both generator and discriminator
-        self.gen_optimizer = torch.optim.Adam(self.generator.parameters(), lr=self.gen_lr,
-                                              betas=(self.gen_beta1, self.gen_beta2))
-        self.dis_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=self.dis_lr,
-                                               betas=(self.dis_beta1, self.dis_beta2))
 
         # Train the GAN
         if not self.gan_handler.trained_bool:

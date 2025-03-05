@@ -1,5 +1,5 @@
 from ctgan import CTGAN
-from ctgan.synthesizers.base import DataTransformer, DataSampler, Generator, Discriminator
+from ctgan.synthesizers.ctgan import Generator, Discriminator
 from ctgan.data_sampler import DataSampler
 from ctgan.data_transformer import DataTransformer
 import torch
