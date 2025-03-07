@@ -63,6 +63,9 @@ class AttackPLGMI(AbstractMINV):
         z_optimization_iter: int = Field(1000, ge=1, description="Number of iterations for optimizing z")
         z_optimization_lr: float = Field(0.0002, ge=0.0, description="Learning rate for optimizing z")
 
+        # dataloader or dataframe
+        data_format: str = Field("dataloader", description="Data format for the pseudo labels")
+
 
         # TODO: Most of these are not necessary if models are pre-trained
 
