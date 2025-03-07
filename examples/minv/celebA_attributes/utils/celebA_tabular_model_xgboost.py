@@ -22,7 +22,7 @@ class xgboost_model(xgb.XGBClassifier):
         "reg_alpha": 0.0,
         "random_state": 42,
         "tree_method": "hist",
-        "device": device
+        #"device": device
         }
 
         super().__init__(**params)
@@ -30,6 +30,17 @@ class xgboost_model(xgb.XGBClassifier):
     def eval(self):
         pass
 
+    def __call__(self, entry):
+        """Make the model callable with PyTorch tensors."""
+        if isinstance(entry, torch.Tensor):
+            entry = entry.cpu().numpy()  # Convert to NumPy array
+        
+        output = self.predict_proba(entry)  # Get class probabilities
+        return torch.tensor(output, dtype=torch.float32)  # Convert back to Tensor
+    
+    def to(self, device):
+        """Override the to method to make it compatible with PyTorch models."""
+        return self
 
 
 def train_xgboost_model(train_data, train_labels, test_data, test_labels, log_dir="logs"):    

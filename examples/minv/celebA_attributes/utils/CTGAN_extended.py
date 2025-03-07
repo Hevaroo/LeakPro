@@ -14,8 +14,8 @@ from torch import cuda, device
 class CustomCTGAN(CTGAN):
     def __init__(self, 
                  embedding_dim=128, 
-                 generator_dim=(256, 256), 
-                 discriminator_dim=(256, 256), 
+                 generator_dim=(129, 129), 
+                 discriminator_dim=(129, 129), 
                  generator_lr=0.0002, 
                  generator_decay=0.000001, 
                  discriminator_lr=0.0002, 
@@ -32,6 +32,9 @@ class CustomCTGAN(CTGAN):
                          generator_lr, generator_decay, discriminator_lr, 
                          discriminator_decay, batch_size, discriminator_steps, 
                          log_frequency, verbose, epochs, pac, cuda)
+        
+    def to(self, device):
+        pass
 
     def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, alpha = 0.1, discrete_columns=()):
         """
@@ -130,9 +133,10 @@ class CustomCTGAN(CTGAN):
                         c2 = c1[perm]
                     """
                     c1 = torch.randint(0, num_classes, (self._batch_size,), device=self._device)
-                    fakez = torch.cat([fakez, c1], dim=1)
+                    
+                    fakez = torch.cat([fakez, c1.unsqueeze(1)], dim=1)
 
-                    real = self._data_sampler.sample_data(train_data, self._batch_size)
+                    real = self._data_sampler.sample_data(train_data, self._batch_size, col=None, opt=None)
                     
 
                     fake = self._generator(fakez)
@@ -172,7 +176,7 @@ class CustomCTGAN(CTGAN):
                     fakez = torch.cat([fakez, c1], dim=1)
                 """
                 c1 = torch.randint(0, num_classes, (self._batch_size,), device=self._device)
-                fakez = torch.cat([fakez, c1], dim=1)
+                fakez = torch.cat([fakez, c1.unsqueeze(1)], dim=1)
 
 
                 fake = self._generator(fakez)

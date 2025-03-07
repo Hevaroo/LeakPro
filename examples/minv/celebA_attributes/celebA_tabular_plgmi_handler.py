@@ -132,12 +132,19 @@ class CelebA_InputHandler(AbstractInputHandler):
         torch.backends.cudnn.benchmark = True
 
         target_model.to(device)
-        gen.to(device)
-        dis.to(device)
         
         ctgan = CustomCTGAN(epochs=n_iter, verbose=True)
+        
+        print(pseudo_loader.dataset.head())
         # ctgan takes dataframe or numpy array as input
-        ctgan.fit(pseudo_loader.dataset, discrete_columns=pseudo_loader.dataset.columns)
+        ctgan.fit(train_data= pseudo_loader.dataset, 
+                    target_model=target_model,
+                    num_classes=5088,
+                    inv_criterion=inv_criterion,
+                    gen_criterion=gen_criterion,
+                    dis_criterion=dis_criterion,
+                    alpha=alpha,
+                    discrete_columns=pseudo_loader.dataset.columns)
         ctgan.save('ctgan.pth')
         
         ctgan.sample(1000)

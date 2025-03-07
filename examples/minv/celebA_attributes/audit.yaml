@@ -19,6 +19,7 @@ audit:  # Configurations for auditing
       z_optimization_iter: 10 # Integer number for indicating the iterations for optimizing the latent code
       z_optimization_lr: 0.0002 # Float number for indicating the learning rate for optimizing the latent code
       num_classes: &n_cls 5088
+      data_format : "dataframe"
       generator:
         module_path: "./utils/CTGAN_extended.py"
         model_class: "CustomCTGAN"

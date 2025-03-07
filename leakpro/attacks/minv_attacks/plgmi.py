@@ -121,12 +121,27 @@ class AttackPLGMI(AbstractMINV):
         logger.info("Performing top-n selection for pseudo labels")
         self.target_model.eval()
         all_confidences = []
-        for entry, _ in self.public_dataloader:
-            with torch.no_grad():
-                outputs = self.target_model(entry)
-                confidences = F.softmax(outputs, dim=1)
-                all_confidences.append(confidences)
-        # Concatenate all confidences
+
+        if self.data_format == "dataloader":
+
+            for entry, _ in self.public_dataloader:
+                with torch.no_grad():
+                    outputs = self.target_model(entry)
+                    confidences = F.softmax(outputs, dim=1)
+                    all_confidences.append(confidences)
+            # Concatenate all confidences
+
+        elif self.data_format == "dataframe":
+
+            # remove "identity" column from dataset
+            public_data = self.public_dataloader.dataset.drop(columns=["identity"])
+
+            outputs = self.target_model(public_data)
+            confidences = F.softmax(outputs, dim=1)
+            all_confidences.append(confidences)
+        else:
+            raise ValueError("Data format not supported")
+
         self.confidences = torch.cat(all_confidences)
 
         logger.info("Retrieved confidences from the target model")
@@ -149,16 +164,27 @@ class AttackPLGMI(AbstractMINV):
 
         # Create pseudo dataloader from top-n pseudo_map
         pseudo_data = []
-        for i in range(self.num_classes):
-            for index, _ in top_n_pseudo_map[i]:
-                # Append the image and pseudo label (index i) to the pseudo data
-                pseudo_data.append((self.public_dataloader.dataset[index][0], i))
-        pseudo_df = pd.DataFrame(pseudo_data)
+
+        if self.data_format == "dataloader":
+            for i in range(self.num_classes):
+                for index, _ in top_n_pseudo_map[i]:
+                    # Append the image and pseudo label (index i) to the pseudo data
+                    pseudo_data.append((self.public_dataloader.dataset[index][0], i))
+        elif self.data_format == "dataframe":
+            for i in range(self.num_classes):
+                for index, _ in top_n_pseudo_map[i]:
+                    # Append the image and pseudo label (index i) to the pseudo data
+                    # Name the column with i is "pseudo_label"
+                    pseudo_entry = public_data.iloc[index].copy()
+                    pseudo_entry["pseudo_label"] = i
+                    pseudo_data.append(pseudo_entry)
+
+            pseudo_data = pd.DataFrame(pseudo_data)
         logger.info("Created pseudo dataloader")
         # pseudo_data is now a list of tuples (entry, pseudo_label)
         # We want to set the default device to the sampler in the returned dataloader to be on device
 
-        return DataLoader(pseudo_df, batch_size=self.batch_size, shuffle=True, generator=torch.Generator(device=self.device))
+        return DataLoader(pseudo_data, batch_size=self.batch_size, shuffle=True, generator=torch.Generator(device=self.device))
 
 
     def prepare_attack(self:Self) -> None:
@@ -171,6 +197,8 @@ class AttackPLGMI(AbstractMINV):
         if tabular:
             self.gan_handler = CTGANHandler(self.handler, configs=self.configs)
             self.discriminator = None
+            self.gen_optimizer = None
+            self.dis_optimizer = None
         else:
             self.gan_handler = GANHandler(self.handler, configs=self.configs)
 
@@ -195,7 +223,6 @@ class AttackPLGMI(AbstractMINV):
             logger.info("GAN not trained, getting psuedo labels")
             # Top-n-selection to get pseudo labels
             self.pseudo_loader = self.top_n_selection()
-            print(self.pseudo_loader.dataset.head())
 
             logger.info("Training the GAN")
             # TODO: Change this input structure to just pass the attack class
@@ -205,7 +232,7 @@ class AttackPLGMI(AbstractMINV):
                                         gen_criterion = gan_losses.GenLoss(loss_type="hinge", is_relativistic=False),
                                         dis_criterion = gan_losses.DisLoss(loss_type="hinge", is_relativistic=False),
                                         inv_criterion = gan_losses.max_margin_loss,
-                                        model = self.target_model,
+                                        target_model = self.target_model,
                                         opt_gen = self.gen_optimizer,
                                         opt_dis = self.dis_optimizer,
                                         n_iter = self.n_iter,
