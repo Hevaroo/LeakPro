@@ -95,21 +95,20 @@ class MINVHandler:
         self.model_path = f"{model_path}/target_model.pkl"
         init_params = self.target_model_metadata.init_params
         # This handles if target model is torch or not...
-        if model_type == "torch":
-            try:
-                with open(self.model_path, "rb") as f:
+
+        try:
+            with open(self.model_path, "rb") as f:
+                if model_type == "torch":
                     self.target_model = self.target_model_blueprint(**init_params)
                     self.target_model.load_state_dict(torch.load(f))
-                logger.info(f"Loaded target model from {model_path}")
-            except FileNotFoundError as e:
-                raise FileNotFoundError(f"Could not find the trained target model at {model_path}") from e
-        elif model_type == "xgboost":
-            try:
-                with open(self.model_path, "rb") as f:
+                elif model_type == "xgboost":
                     self.target_model = joblib.load(f)
-                logger.info(f"Loaded target model from {model_path}")
-            except FileNotFoundError as e:
-                raise FileNotFoundError(f"Could not find the trained target model at {model_path}") from e
+                else:
+                    raise ValueError(f"Model type {model_type} not supported.")
+            logger.info(f"Loaded target model from {model_path}")
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"Could not find the trained target model at {model_path}") from e
+
 
 
     def get_public_dataloader(self:Self, batch_size: int) -> DataLoader:

@@ -27,17 +27,12 @@ class xgboost_model(xgb.XGBClassifier):
 
         super().__init__(**params)
 
-    def load_state_dict(self, state_dict):
-        pass
-
     def eval(self):
         pass
 
 
 
-def train_xgboost_model(train_data, train_labels, test_data, test_labels, log_dir="logs"):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    
+def train_xgboost_model(train_data, train_labels, test_data, test_labels, log_dir="logs"):    
 
     model = xgboost_model()
     model.fit(train_data, train_labels, eval_set=[(train_data, train_labels)],verbose=True)
