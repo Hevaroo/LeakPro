@@ -14,8 +14,8 @@ from torch import cuda, device
 class CustomCTGAN(CTGAN):
     def __init__(self, 
                  embedding_dim=128, 
-                 generator_dim=(129, 129), 
-                 discriminator_dim=(129, 129), 
+                 generator_dim=(256, 256), 
+                 discriminator_dim=(256, 256), 
                  generator_lr=0.0002, 
                  generator_decay=0.000001, 
                  discriminator_lr=0.0002, 
@@ -28,12 +28,17 @@ class CustomCTGAN(CTGAN):
                  pac=10, 
                  cuda=True):
         
+        self.dim_z = embedding_dim
+        
         super().__init__(embedding_dim, generator_dim, discriminator_dim, 
                          generator_lr, generator_decay, discriminator_lr, 
                          discriminator_decay, batch_size, discriminator_steps, 
                          log_frequency, verbose, epochs, pac, cuda)
         
     def to(self, device):
+        pass
+    
+    def eval(self):
         pass
 
     def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, alpha = 0.1, discrete_columns=()):
@@ -110,6 +115,9 @@ class CustomCTGAN(CTGAN):
         for i in epoch_iterator:
             for id_ in range(steps_per_epoch):
                 for n in range(self._discriminator_steps):
+                    
+                    # TODO: Only condition on pseudo-labels
+                    
                     fakez = torch.normal(mean=mean, std=std)
 
                     """
@@ -132,9 +140,19 @@ class CustomCTGAN(CTGAN):
                         )
                         c2 = c1[perm]
                     """
-                    c1 = torch.randint(0, num_classes, (self._batch_size,), device=self._device)
                     
-                    fakez = torch.cat([fakez, c1.unsqueeze(1)], dim=1)
+                    condvec = self._data_sampler.sample_condvec(self._batch_size)
+                                        
+                    c1 = condvec[0]
+                                        
+                    c1 = torch.from_numpy(c1).to(self._device)
+
+                    
+                    fakez = torch.cat([fakez, c1], dim=1)
+                    
+                    #c1 = torch.randint(0, num_classes, (self._batch_size,), device=self._device)
+                    
+                    #fakez = torch.cat([fakez, c1.unsqueeze(1)], dim=1)
 
                     real = self._data_sampler.sample_data(train_data, self._batch_size, col=None, opt=None)
                     
@@ -144,12 +162,14 @@ class CustomCTGAN(CTGAN):
 
                     real = torch.from_numpy(real.astype('float32')).to(self._device)
 
-                    #if c1 is not None:
-                    #    fake_cat = torch.cat([fakeact, c1], dim=1)
-                    #else:
-                    real_cat = real
-                    fake_cat = fakeact
-
+                    if c1 is not None:
+                        fake_cat = torch.cat([fakeact, c1], dim=1)
+                        real_cat = torch.cat([real, c1], dim=1)
+                    else:
+                        real_cat = real
+                        fake_cat = fakeact
+                    
+                    
                     y_fake = discriminator(fake_cat)
                     y_real = discriminator(real_cat)
 
@@ -166,7 +186,7 @@ class CustomCTGAN(CTGAN):
 
                 fakez = torch.normal(mean=mean, std=std)
                 condvec = self._data_sampler.sample_condvec(self._batch_size)
-                """
+                
                 if condvec is None:
                     c1, m1, col, opt = None, None, None, None
                 else:
@@ -174,29 +194,37 @@ class CustomCTGAN(CTGAN):
                     c1 = torch.from_numpy(c1).to(self._device)
                     m1 = torch.from_numpy(m1).to(self._device)
                     fakez = torch.cat([fakez, c1], dim=1)
-                """
-                c1 = torch.randint(0, num_classes, (self._batch_size,), device=self._device)
-                fakez = torch.cat([fakez, c1.unsqueeze(1)], dim=1)
+                
+                #c1 = torch.randint(0, num_classes, (self._batch_size,), device=self._device)
+                #fakez = torch.cat([fakez, c1.unsqueeze(1)], dim=1)
 
 
                 fake = self._generator(fakez)
                 fakeact = self._apply_activate(fake)
 
-                #if c1 is not None:
-                #    y_fake = discriminator(torch.cat([fakeact, c1], dim=1))
-                #else:
-                y_fake = discriminator(fakeact)
+                if c1 is not None:
+                    y_fake = discriminator(torch.cat([fakeact, c1], dim=1))
+                else:
+                    y_fake = discriminator(fakeact)
 
                 # Pseudo label batch is last column of fakeact
                 pseudo_label_batch = fakeact[:, -1].long()
 
-                # Fake feature vector is all but last column of fakeact
-                fakefeat = fakeact[:, :-1]
+                # Fake feature vector
+                fakefeat = fakeact
+                
+                fakefeat = fakefeat.detach().cpu().numpy()
+                     
+                sample = self._transformer.inverse_transform(fakefeat)
+                
+                #remove 'pseudo_label' column
+                sample = sample.drop(columns=['pseudo_label'])                
+                
 
                 if condvec is None:
                     inv_loss = 0
                 else:
-                    inv_loss  = inv_criterion(target_model(fakefeat), pseudo_label_batch)
+                    inv_loss  = inv_criterion(target_model(sample), pseudo_label_batch)
 
                 loss_g = gen_criterion(y_fake)
                 loss_all = loss_g + inv_loss*alpha
@@ -224,7 +252,7 @@ class CustomCTGAN(CTGAN):
 
             if self._verbose:
                 epoch_iterator.set_description(
-                    description.format(gen=generator_loss, dis=discriminator_loss)
+                    description.format(gen=generator_loss, dis=discriminator_loss, inv=inversion_loss)
                 )
 
 

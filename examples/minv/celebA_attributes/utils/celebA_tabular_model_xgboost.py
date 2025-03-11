@@ -33,7 +33,7 @@ class xgboost_model(xgb.XGBClassifier):
     def __call__(self, entry):
         """Make the model callable with PyTorch tensors."""
         if isinstance(entry, torch.Tensor):
-            entry = entry.cpu().numpy()  # Convert to NumPy array
+            entry = entry.detach().cpu().numpy()  # Convert to NumPy array
         
         output = self.predict_proba(entry)  # Get class probabilities
         return torch.tensor(output, dtype=torch.float32)  # Convert back to Tensor

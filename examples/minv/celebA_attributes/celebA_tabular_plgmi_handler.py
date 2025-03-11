@@ -135,6 +135,14 @@ class CelebA_InputHandler(AbstractInputHandler):
         
         ctgan = CustomCTGAN(epochs=n_iter, verbose=True)
         
+        # discrete columns are the first 40 columns in the dataset
+        discrete_columns = pseudo_loader.dataset.columns[:40]
+        
+        # add 'pseudo_label' to the discrete columns
+        discrete_columns = discrete_columns.append(pd.Index(['pseudo_label']))
+        
+        print(discrete_columns)
+        
         print(pseudo_loader.dataset.head())
         # ctgan takes dataframe or numpy array as input
         ctgan.fit(train_data= pseudo_loader.dataset, 
@@ -144,10 +152,11 @@ class CelebA_InputHandler(AbstractInputHandler):
                     gen_criterion=gen_criterion,
                     dis_criterion=dis_criterion,
                     alpha=alpha,
-                    discrete_columns=pseudo_loader.dataset.columns)
+                    discrete_columns=discrete_columns)
         ctgan.save('ctgan.pth')
         
-        ctgan.sample(1000)
+        print(ctgan.sample(10))
 
+        
     
     
