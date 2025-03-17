@@ -1,8 +1,8 @@
 """Parent class for user inputs."""
 
-import os
 
 import joblib
+import pandas as pd
 import torch
 from pydantic import BaseModel
 from torch.utils.data import DataLoader
@@ -122,4 +122,9 @@ class MINVHandler:
     def get_num_classes(self:Self) -> int:
         """Return the number of classes in the target model."""
         # TODO: Implement this to work with different types of datasets (where the label is not always called y)
+
+        # if self.private_dataset is pd dataframe then:
+        if isinstance(self.private_dataset, pd.DataFrame):
+            return self.private_dataset["identity"].unique().shape[0]
+        # if self.private_dataset is a torch dataset then
         return self.private_dataset.y.unique().shape[0]

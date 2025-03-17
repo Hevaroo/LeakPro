@@ -92,8 +92,10 @@ class AttackPLGMI(AbstractMINV):
 
         self.num_classes = self.handler.get_num_classes()
 
-        self.configs.generator.init_params["num_classes"] = self.num_classes
-        self.configs.discriminator.init_params["num_classes"] = self.num_classes
+        if self.configs.generator is not None:
+            self.configs.generator.init_params["num_classes"] = self.num_classes
+        if self.configs.discriminator is not None:
+            self.configs.discriminator.init_params["num_classes"] = self.num_classes
 
 
 

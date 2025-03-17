@@ -19,7 +19,8 @@ class CustomCTGAN(CTGAN):
                  generator_lr=0.0002, 
                  generator_decay=0.000001, 
                  discriminator_lr=0.0002, 
-                 discriminator_decay=0.000001, 
+                 discriminator_decay=0.000001,
+                 num_classes=5088,
                  batch_size=500, 
                  discriminator_steps=1, 
                  log_frequency=True, 
@@ -29,17 +30,90 @@ class CustomCTGAN(CTGAN):
                  cuda=True):
         
         self.dim_z = embedding_dim
-        
+
         super().__init__(embedding_dim, generator_dim, discriminator_dim, 
                          generator_lr, generator_decay, discriminator_lr, 
                          discriminator_decay, batch_size, discriminator_steps, 
                          log_frequency, verbose, epochs, pac, cuda)
+        
+        self._transformer = DataTransformer()
+
         
     def to(self, device):
         pass
     
     def eval(self):
         pass
+    
+    def __call__(self, z=None, y=None):
+        """Sample data similar to the training data.
+
+        Choosing a condition_column and condition_value will increase the probability of the
+        discrete condition_value happening in the condition_column.
+
+        Args:
+            n (int):
+                Number of rows to sample.
+            condition_column (string):
+                Name of a discrete column.
+            condition_value (string):
+                Name of the category in the condition_column which we wish to increase the
+                probability of happening.
+
+        Returns:
+            numpy.ndarray or pandas.DataFrame
+        """
+        if self._transformer is None:
+            raise ValueError("The transformer has not been initialized. Please call the `fit` method first.")
+
+        #condition_column = "pseudo_label"
+        #condition_value = y
+        condition_column = None
+        condition_value = None
+        
+        n = 1
+                
+        if condition_column is not None and condition_value is not None:
+            condition_info = self._transformer.convert_column_name_value_to_id(
+                condition_column, condition_value
+            )
+            global_condition_vec = self._data_sampler.generate_cond_from_condition_column_info(
+                condition_info, self._batch_size
+            )
+        else:
+            global_condition_vec = None
+
+        steps = n // self._batch_size + 1
+        data = []
+        for i in range(steps):
+            mean = torch.zeros(self._batch_size, self._embedding_dim)
+            std = mean + 1
+            if z is None:
+                fakez = torch.normal(mean=mean, std=std).to(self._device)
+            else:
+                fakez = z
+            
+            
+            if global_condition_vec is not None:
+                condvec = global_condition_vec.copy()
+            else:
+                condvec = self._data_sampler.sample_original_condvec(self._batch_size)
+
+            if condvec is None:
+                pass
+            else:
+                c1 = condvec
+                c1 = torch.from_numpy(c1).to(self._device)
+                fakez = torch.cat([fakez, c1], dim=1)
+
+            fake = self._generator(fakez)
+            fakeact = self._apply_activate(fake)
+            data.append(fakeact.detach().cpu().numpy())
+
+        data = np.concatenate(data, axis=0)
+        data = data[:n]
+
+        return self._transformer.inverse_transform(data)
 
     def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, alpha = 0.1, discrete_columns=()):
         """
@@ -68,7 +142,7 @@ class CustomCTGAN(CTGAN):
         self._validate_discrete_columns(train_data, discrete_columns)
         self._validate_null_data(train_data, discrete_columns)
 
-        self._transformer = DataTransformer()
+        
         self._transformer.fit(train_data, discrete_columns)
 
         train_data = self._transformer.transform(train_data)
