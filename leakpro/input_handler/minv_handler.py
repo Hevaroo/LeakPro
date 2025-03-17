@@ -119,3 +119,7 @@ class MINVHandler:
         """Return the private dataset dataloader."""
         return DataLoader(self.private_dataset, batch_size = batch_size, shuffle=False)
 
+    def get_num_classes(self:Self) -> int:
+        """Return the number of classes in the target model."""
+        # TODO: Implement this to work with different types of datasets (where the label is not always called y)
+        return self.private_dataset.y.unique().shape[0]

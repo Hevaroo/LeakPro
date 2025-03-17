@@ -4,7 +4,6 @@ from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from leakpro import AbstractInputHandler
-from leakpro.attacks.utils import gan_losses
 from leakpro.schemas import TrainingOutput
 import kornia
 import time
@@ -58,7 +57,7 @@ class CelebA_InputHandler(AbstractInputHandler):
                 train_loss += loss.item()* labels.size(0)
                 total_samples += labels.size(0)
 
-        avg_train_loss = train_loss / len(dataloader)
+        avg_train_loss = train_loss / total_samples
         train_accuracy = train_acc / total_samples  
         model.to("cpu")
 
@@ -84,7 +83,7 @@ class CelebA_InputHandler(AbstractInputHandler):
                 test_loss += loss.item()* labels.size(0)
                 total_samples += labels.size(0)
         
-        avg_test_loss = test_loss / len(dataloader)
+        avg_test_loss = test_loss / total_samples
         test_accuracy = test_acc / total_samples
         model.to("cpu")
 
