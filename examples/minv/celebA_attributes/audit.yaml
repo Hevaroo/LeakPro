@@ -5,7 +5,7 @@ audit:  # Configurations for auditing
   attack_list:
     plgmi:
       n_dis: 2 # Integer number for indicating the number of discriminator updates per generator update
-      n_iter: 10 # Integer number for indicating the iterations for training the GAN
+      n_iter: 1 # Integer number for indicating the iterations for training the GAN
       batch_size: 32 # Integer number for indicating batch size for training the GAN
       gen_lr: 0.0005 # Float number for indicating learning rate for training the generator
       dis_lr: 0.0002 # Float number for indicating learning rate for training the discriminator
@@ -26,6 +26,8 @@ audit:  # Configurations for auditing
         #checkpoint_path: "gen.pth"
         init_params:
           embedding_dim: *dim_z
+          verbose: True
+          epochs: 1
           #num_classes: *n_cls
           #bottom_width: 4
       discriminator:

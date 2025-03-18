@@ -120,13 +120,14 @@ class AttackPLGMI(AbstractMINV):
         }
 
 
-    def top_n_selection(self:Self) -> DataLoader:
+    def top_n_selection(self:Self) -> DataLoader:  # noqa: C901
         """"Top n selection of pseudo labels."""
         # TODO: This does not scale well. Consider creating a class for the dataloader and implementing the __getitem__ method.
         logger.info("Performing top-n selection for pseudo labels")
         self.target_model.eval()
         all_confidences = []
 
+        # TODO: Maybe this is handler/modality functions
         if self.data_format == "dataloader":
 
             for entry, _ in self.public_dataloader:
@@ -325,9 +326,14 @@ class AttackPLGMI(AbstractMINV):
             # Generate fake images
             fake = self.generator(z, y)
 
-            # Average the output of the target model
-            out1 = self.target_model(aug_list(fake))
-            out2 = self.target_model(aug_list(fake))
+            if self.data_format == "dataframe":
+                out1 = self.target_model(fake)
+                out2 = self.target_model(fake)
+            elif self.data_format == "dataloader":
+                out1 = self.target_model(aug_list(fake))
+                out2 = self.target_model(aug_list(fake))
+            else:
+                raise ValueError("Data format not supported")
 
             if z.grad is not None:
                 z.grad.data.zero_()

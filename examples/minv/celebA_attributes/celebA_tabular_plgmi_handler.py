@@ -133,7 +133,7 @@ class CelebA_InputHandler(AbstractInputHandler):
 
         target_model.to(device)
         
-        ctgan = CustomCTGAN(epochs=n_iter, verbose=True)
+        ctgan = gen
         
         # discrete columns are the first 40 columns in the dataset
         discrete_columns = pseudo_loader.dataset.columns[:40]
@@ -153,7 +153,7 @@ class CelebA_InputHandler(AbstractInputHandler):
                     dis_criterion=dis_criterion,
                     alpha=alpha,
                     discrete_columns=discrete_columns)
-        ctgan.save('ctgan.pth')
+        #ctgan.save('ctgan.pth')
         
         print(ctgan.sample(10))
 

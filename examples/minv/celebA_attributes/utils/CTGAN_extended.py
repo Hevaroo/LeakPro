@@ -21,7 +21,7 @@ class CustomCTGAN(CTGAN):
                  discriminator_lr=0.0002, 
                  discriminator_decay=0.000001,
                  num_classes=5088,
-                 batch_size=500, 
+                 batch_size=100, 
                  discriminator_steps=1, 
                  log_frequency=True, 
                  verbose=False, 
@@ -37,7 +37,6 @@ class CustomCTGAN(CTGAN):
                          log_frequency, verbose, epochs, pac, cuda)
         
         self._transformer = DataTransformer()
-
         
     def to(self, device):
         pass
@@ -150,7 +149,6 @@ class CustomCTGAN(CTGAN):
         self._data_sampler = DataSampler(
             train_data, self._transformer.output_info_list, self._log_frequency
         )
-
         data_dim = self._transformer.output_dimensions
 
         self._generator = Generator(
