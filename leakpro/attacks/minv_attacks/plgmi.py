@@ -316,7 +316,7 @@ class AttackPLGMI(AbstractMINV):
 
         logger.info("Optimizing z for the PLG-MI attack")
 
-        z = torch.randn(bs, self.generator.dim_z, device=self.device)
+        z = torch.randn(bs, self.generator.dim_z, device=self.device, requires_grad=True)
         z.requires_grad = True
 
         optimizer = torch.optim.Adam([z], lr=lr)
@@ -327,19 +327,29 @@ class AttackPLGMI(AbstractMINV):
             fake = self.generator(z, y)
 
             if self.data_format == "dataframe":
+                # remove "pseudo_label" column from fake
+                fake = fake.drop(columns=["pseudo_label"])
+
                 out1 = self.target_model(fake)
                 out2 = self.target_model(fake)
+
+                # compute the loss
+                inv_loss = torch.mean((out1 - y.float())**2) + torch.mean((out2 - y.float())**2)
+
             elif self.data_format == "dataloader":
+
                 out1 = self.target_model(aug_list(fake))
                 out2 = self.target_model(aug_list(fake))
+                # compute the loss
+                inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
+
             else:
                 raise ValueError("Data format not supported")
 
             if z.grad is not None:
                 z.grad.data.zero_()
 
-            # Compute the loss
-            inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
+            assert inv_loss.requires_grad, "inv_loss is not connected to the computational graph."
 
             # Update the latent vector z
             optimizer.zero_grad()

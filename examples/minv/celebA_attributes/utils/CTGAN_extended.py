@@ -65,26 +65,32 @@ class CustomCTGAN(CTGAN):
         if self._transformer is None:
             raise ValueError("The transformer has not been initialized. Please call the `fit` method first.")
 
-        #condition_column = "pseudo_label"
-        #condition_value = y
-        condition_column = None
-        condition_value = None
+        condition_column = "pseudo_label"
+        condition_values = y.detach().cpu().numpy()
+        #condition_column = None
+        #condition_value = None
         
-        n = 1
-                
-        if condition_column is not None and condition_value is not None:
-            condition_info = self._transformer.convert_column_name_value_to_id(
-                condition_column, condition_value
-            )
-            global_condition_vec = self._data_sampler.generate_cond_from_condition_column_info(
-                condition_info, self._batch_size
-            )
-        else:
-            global_condition_vec = None
+        condition_values = condition_values[:1]
+        
+        samples = pd.DataFrame()
+        
+        for condition_value in condition_values:        
+            if condition_column is not None and condition_value is not None:
+                try:
+                    condition_info = self._transformer.convert_column_name_value_to_id(
+                        condition_column, condition_value
+                    )
+                    global_condition_vec = self._data_sampler.generate_cond_from_condition_column_info(
+                        condition_info, self._batch_size
+                    )
+                except ValueError:
+                    # If the transformer has not seen the condition value in training, it will raise a ValueError
+                    # We still want to be able to sample, so we set the global_condition_vec to None
+                    global_condition_vec = None
+            else:
+                global_condition_vec = None
 
-        steps = n // self._batch_size + 1
-        data = []
-        for i in range(steps):
+            data = []
             mean = torch.zeros(self._batch_size, self._embedding_dim)
             std = mean + 1
             if z is None:
@@ -109,10 +115,12 @@ class CustomCTGAN(CTGAN):
             fakeact = self._apply_activate(fake)
             data.append(fakeact.detach().cpu().numpy())
 
-        data = np.concatenate(data, axis=0)
-        data = data[:n]
+            data = np.concatenate(data, axis=0)
 
-        return self._transformer.inverse_transform(data)
+            sample = self._transformer.inverse_transform(data)
+            # add row to samples
+            samples = pd.concat([samples, sample])
+        return samples
 
     def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, alpha = 0.1, discrete_columns=()):
         """
