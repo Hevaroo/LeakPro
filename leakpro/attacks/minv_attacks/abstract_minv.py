@@ -52,8 +52,6 @@ class AbstractMINV(ABC):
             AbstractMINV.handler = handler
             AbstractMINV._initialized = True
 
-        # TODO: Class attributes initialized checks
-
 
     def _validate_config(self: Self, name: str, value: float, min_val: float, max_val: float) -> None:
         if not (min_val <= value <= (max_val if max_val is not None else value)):
