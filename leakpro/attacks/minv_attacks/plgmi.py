@@ -469,7 +469,7 @@ class AttackPLGMI(AbstractMINV):
             study = optuna.create_study(direction="minimize")
 
             logger.info("Optimizing z using Optuna")
-            study.optimize(objective, n_trials=iter_times, show_progress_bar=True)
+            study.optimize(objective, n_trials=iter_times, show_progress_bar=True, n_jobs=-1)
 
             # Convert the dictionary values to a NumPy array
             z_numpy = np.array(list(study.best_params.values()))
