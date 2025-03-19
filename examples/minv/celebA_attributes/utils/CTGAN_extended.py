@@ -72,6 +72,12 @@ class CustomCTGAN(CTGAN):
         
         condition_values = condition_values[:1]
         
+        if y is not None:
+            # Batch size is length of y
+            bs = y.shape[0]
+        else:
+            bs = self._batch_size
+
         samples = pd.DataFrame()
         
         for condition_value in condition_values:        
@@ -81,7 +87,7 @@ class CustomCTGAN(CTGAN):
                         condition_column, condition_value
                     )
                     global_condition_vec = self._data_sampler.generate_cond_from_condition_column_info(
-                        condition_info, self._batch_size
+                        condition_info, bs
                     )
                 except ValueError:
                     # If the transformer has not seen the condition value in training, it will raise a ValueError
@@ -91,7 +97,7 @@ class CustomCTGAN(CTGAN):
                 global_condition_vec = None
 
             data = []
-            mean = torch.zeros(self._batch_size, self._embedding_dim)
+            mean = torch.zeros(bs, self._embedding_dim)
             std = mean + 1
             if z is None:
                 fakez = torch.normal(mean=mean, std=std).to(self._device)
@@ -102,7 +108,7 @@ class CustomCTGAN(CTGAN):
             if global_condition_vec is not None:
                 condvec = global_condition_vec.copy()
             else:
-                condvec = self._data_sampler.sample_original_condvec(self._batch_size)
+                condvec = self._data_sampler.sample_original_condvec(bs)
 
             if condvec is None:
                 pass

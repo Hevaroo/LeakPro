@@ -16,6 +16,7 @@ from leakpro.attacks.utils import gan_losses
 from leakpro.attacks.utils.gan_handler import CTGANHandler, GANHandler
 from leakpro.input_handler.minv_handler import MINVHandler
 from leakpro.input_handler.modality_extensions.image_metrics import ImageMetrics
+from leakpro.input_handler.modality_extensions.tabular_metrics import TabularMetrics
 from leakpro.metrics.attack_result import MinvResult
 from leakpro.utils.import_helper import Self
 from leakpro.utils.logger import logger
@@ -280,11 +281,11 @@ class AttackPLGMI(AbstractMINV):
 
         if self.data_format == "dataloader":
             # Compute image metrics for the optimized z and labels
-            image_metrics = ImageMetrics(self.handler, self.gan_handler,
+            metrics = ImageMetrics(self.handler, self.gan_handler,
                                         reconstruction_configs,
                                         labels=labels,
                                         z=opt_z)
-            logger.info(image_metrics.results)
+            logger.info(metrics.results)
             # TODO: Implement a class with a .save function.
 
         elif self.data_format == "dataframe":
@@ -293,9 +294,13 @@ class AttackPLGMI(AbstractMINV):
 
             print(fake.head())
 
-            return
+            metrics = TabularMetrics(self.handler, self.gan_handler,
+                                        reconstruction_configs,
+                                        labels=labels,
+                                        z=opt_z)
+            logger.info(metrics.results)
 
-        return image_metrics.results
+        return metrics.results
 
     def optimize_z(self:Self,
                    y: torch.tensor,
