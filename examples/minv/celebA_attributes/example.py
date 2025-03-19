@@ -37,21 +37,6 @@ train_loader.dataset.labels = le.transform(train_loader.dataset.labels)
 
 #print(f"Training Accuracy: {train_acc:.4f}, Training Loss (mlogloss): {train_loss:.4f}")
 
-'''
-# load the xgboost model
-import xgboost as xgb
-
-# Load the model from the .pkl file
-with open("target/xgboost_model.pkl", "rb") as f:
-    model = pickle.load(f)
-from sklearn.metrics import accuracy_score
-
-with open("target/xgboost_metadata.pkl", "rb") as f:
-    metadata = pickle.load(f)
-
-# print the metadata
-print(metadata)
-'''
 
 from leakpro import LeakPro
 from examples.minv.celebA_attributes.celebA_tabular_plgmi_handler import CelebA_InputHandler
