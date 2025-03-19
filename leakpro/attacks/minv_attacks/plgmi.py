@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 
 from leakpro.attacks.minv_attacks.abstract_minv import AbstractMINV
 from leakpro.attacks.utils import gan_losses
-from leakpro.attacks.utils.gan_handler import CTGANHandler, GANHandler
+from leakpro.attacks.utils.gan_handler import GANHandler
 from leakpro.input_handler.minv_handler import MINVHandler
 from leakpro.input_handler.modality_extensions.image_metrics import ImageMetrics
 from leakpro.input_handler.modality_extensions.tabular_metrics import TabularMetrics
@@ -191,8 +191,8 @@ class AttackPLGMI(AbstractMINV):
             pseudo_data = pd.DataFrame(pseudo_data)
         logger.info("Created pseudo dataloader")
         # pseudo_data is now a list of tuples (entry, pseudo_label)
-        # We want to set the default device to the sampler in the returned dataloader to be on device
-
+        # We want to set the default device to the sampler in the returned dataloader
+        # to be on device, does not apply when using CTGAN
         return DataLoader(pseudo_data, batch_size=self.batch_size, shuffle=True, generator=torch.Generator(device=self.device))
 
 
@@ -203,7 +203,7 @@ class AttackPLGMI(AbstractMINV):
         # Get the target model from the handler
         self.target_model = self.handler.target_model
         if self.data_format == "dataframe":
-            self.gan_handler = CTGANHandler(self.handler, configs=self.configs)
+            self.gan_handler = GANHandler(self.handler, configs=self.configs, use_discriminator=False)
             self.discriminator = None
             self.gen_optimizer = None
             self.dis_optimizer = None
@@ -281,7 +281,7 @@ class AttackPLGMI(AbstractMINV):
 
         if self.data_format == "dataloader":
 
-            opt_z = self.optimize_z_torch(y=labels,
+            opt_z = self.optimize_z_grad(y=labels,
                                 iter_times=self.configs.z_optimization_iter).to(self.device)
 
             # Compute image metrics for the optimized z and labels
@@ -293,7 +293,7 @@ class AttackPLGMI(AbstractMINV):
 
         elif self.data_format == "dataframe":
             # generate samples from the generator
-            opt_z = self.optimize_z_xgboost(y=labels,
+            opt_z = self.optimize_z_no_grad(y=labels,
                                 iter_times=self.configs.z_optimization_iter).to(self.device)
 
 
@@ -311,7 +311,7 @@ class AttackPLGMI(AbstractMINV):
 
         return metrics.results
 
-    def optimize_z_torch(self:Self,
+    def optimize_z_grad(self:Self,
                    y: torch.tensor,
                    iter_times: int = 10) -> torch.tensor:
         """Find the optimal latent vectors z for labels y.
@@ -376,7 +376,7 @@ class AttackPLGMI(AbstractMINV):
 
         return z
 
-    def optimize_z_xgboost(self, y: torch.tensor, iter_times: int = 10) -> torch.tensor:
+    def optimize_z_no_grad(self, y: torch.tensor, iter_times: int = 10) -> torch.tensor:
         """Find the optimal latent vectors z for labels y.
 
         Args:

@@ -14,12 +14,13 @@ from .generator_handler import GeneratorHandler
 class GANHandler(GeneratorHandler):
     """Handler for training and managing GANs."""
 
-    def __init__(self: Self, handler: MINVHandler, configs: dict) -> None:
+    def __init__(self: Self, handler: MINVHandler, configs: dict, use_discriminator: bool = True) -> None:
         """Initialize the GANHandler class."""
         logger.info("Initializing GANHandler...")
 
         super().__init__(handler, configs=configs, caller="gan_handler")
-        self._setup_discriminator_configs(configs.discriminator)
+        if use_discriminator:
+            self._setup_discriminator_configs(configs.discriminator)
 
     def _setup_discriminator_configs(self: Self, configs : dict) -> None:
         """Load discriminator-specific configurations (e.g., discriminator path, params)."""
@@ -87,42 +88,4 @@ class GANHandler(GeneratorHandler):
     def save_discriminator(self, discriminator: Module, path: str) -> None:
         """Save the discriminator model."""
         torch.save(discriminator.state_dict(), path)
-
-class CTGANHandler(GeneratorHandler):
-    """Handler for training and managing GANs."""
-
-    def __init__(self: Self, handler: MINVHandler, configs: dict) -> None:
-        """Initialize the GANHandler class."""
-        logger.info("Initializing CTGANHandler...")
-        super().__init__(handler, configs=configs, caller="gan_handler")
-        self.discriminator = None
-
-    def sample_from_generator(self,
-                                batch_size: int = None,
-                                label: int = None,
-                                z: torch.tensor = None) -> tuple:
-        """Samples data from a given generator model.
-
-        Args:
-            batch_size (int): The number of samples to generate.
-            label (int): The optional class label to generate samples for, otherwise random.
-            z (torch.tensor): The latent vector to generate samples from, otherwise random.
-
-        Returns:
-            tuple: A tuple containing the generated samples, the class labels, and the latent vectors.
-
-        """
-        if batch_size is None:
-            batch_size = 1
-
-        if z is not None:
-            z = z.unsqueeze(0).expand(batch_size, -1).to(self.device)
-        else:
-            z = torch.empty(batch_size, self.dim_z, dtype=torch.float32, device=self.device).normal_()
-
-        if label is not None:
-            y = torch.tensor([label] * batch_size).to(self.device)
-        else:
-            y = torch.randint(0, self.num_classes, (batch_size,)).to(self.device)
-        return self.generator(z, y), y, z
 
