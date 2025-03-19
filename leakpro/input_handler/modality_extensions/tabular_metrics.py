@@ -85,7 +85,6 @@ class TabularMetrics:
                                                                             z=z_i)
             
             generated_samples = generated_samples.drop(columns=["pseudo_label"])
-            print(generated_samples)
             output = self.evaluation_model(generated_samples)
             prediction = torch.argmax(output, dim=1)
             correct_predictions.append(prediction == label_i)

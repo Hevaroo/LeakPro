@@ -15,14 +15,14 @@ class xgboost_model(xgb.XGBClassifier):
         "eval_metric": "mlogloss",
         "learning_rate": 0.1,
         "max_depth": 6,
-        "n_estimators": 10,
+        "n_estimators": 1000,
         "subsample": 0.5,
         "colsample_bytree": 1.0,
         "reg_lambda": 1.0,
         "reg_alpha": 0.0,
         "random_state": 42,
         "tree_method": "hist",
-        #"device": device
+        "device": device
         }
 
         super().__init__(**params)
@@ -61,6 +61,7 @@ def train_xgboost_model(train_data, train_labels, test_data, test_labels, log_di
     #test_loss = log_loss(test_labels, test_probs, labels=np.unique(test_labels))
     
     # Save model
+    model.device = "cpu"
     os.makedirs(log_dir, exist_ok=True)
     model_save_path = os.path.join(log_dir, "target_model.pkl")
     with open(model_save_path, "wb") as f:

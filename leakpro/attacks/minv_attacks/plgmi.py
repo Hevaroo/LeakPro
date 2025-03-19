@@ -275,6 +275,8 @@ class AttackPLGMI(AbstractMINV):
         # Get random labels
         labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
 
+        random_z = torch.randn(num_audited_classes, self.generator.dim_z, device=self.device)
+
         # Optimize z, TODO: Optimize in batches
         opt_z = self.optimize_z2(y=labels, lr= self.configs.z_optimization_lr,
                                 iter_times=self.configs.z_optimization_iter).to(self.device)
@@ -290,6 +292,13 @@ class AttackPLGMI(AbstractMINV):
 
         elif self.data_format == "dataframe":
             # generate samples from the generator
+
+            pre_z_opt = TabularMetrics(self.handler, self.gan_handler,
+                                        reconstruction_configs,
+                                        labels=labels,
+                                        z=random_z)
+            logger.info(pre_z_opt.results)
+
             fake = self.generator(opt_z, labels)
 
             print(fake.head())
