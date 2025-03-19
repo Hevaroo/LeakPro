@@ -1,5 +1,4 @@
 """Implementation of the PLGMI attack."""
-import logging
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -203,13 +202,12 @@ class AttackPLGMI(AbstractMINV):
 
         # Get the target model from the handler
         self.target_model = self.handler.target_model
-        tabular = True
-        if tabular:
+        if self.data_format == "dataframe":
             self.gan_handler = CTGANHandler(self.handler, configs=self.configs)
             self.discriminator = None
             self.gen_optimizer = None
             self.dis_optimizer = None
-        else:
+        elif self.data_format == "dataloader":
             self.gan_handler = GANHandler(self.handler, configs=self.configs)
 
             # Get the discriminator
@@ -219,6 +217,8 @@ class AttackPLGMI(AbstractMINV):
                                                 betas=(self.gen_beta1, self.gen_beta2))
             self.dis_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=self.dis_lr,
                                                 betas=(self.dis_beta1, self.dis_beta2))
+        else:
+            raise ValueError("Data format not supported")
 
         # TODO: Change structure of how we load data, handler or model_handler should do this, not gan_handler
         # Get public dataloader
@@ -278,20 +278,24 @@ class AttackPLGMI(AbstractMINV):
         random_z = torch.randn(num_audited_classes, self.generator.dim_z, device=self.device)
 
         # Optimize z, TODO: Optimize in batches
-        opt_z = self.optimize_z2(y=labels, lr= self.configs.z_optimization_lr,
-                                iter_times=self.configs.z_optimization_iter).to(self.device)
 
         if self.data_format == "dataloader":
+
+            opt_z = self.optimize_z_torch(y=labels,
+                                iter_times=self.configs.z_optimization_iter).to(self.device)
+
             # Compute image metrics for the optimized z and labels
             metrics = ImageMetrics(self.handler, self.gan_handler,
                                         reconstruction_configs,
                                         labels=labels,
                                         z=opt_z)
-            logger.info(metrics.results)
             # TODO: Implement a class with a .save function.
 
         elif self.data_format == "dataframe":
             # generate samples from the generator
+            opt_z = self.optimize_z_xgboost(y=labels,
+                                iter_times=self.configs.z_optimization_iter).to(self.device)
+
 
             pre_z_opt = TabularMetrics(self.handler, self.gan_handler,
                                         reconstruction_configs,
@@ -299,21 +303,16 @@ class AttackPLGMI(AbstractMINV):
                                         z=random_z)
             logger.info(pre_z_opt.results)
 
-            fake = self.generator(opt_z, labels)
-
-            print(fake.head())
-
             metrics = TabularMetrics(self.handler, self.gan_handler,
                                         reconstruction_configs,
                                         labels=labels,
                                         z=opt_z)
-            logger.info(metrics.results)
+        logger.info(metrics.results)
 
         return metrics.results
 
-    def optimize_z(self:Self,
+    def optimize_z_torch(self:Self,
                    y: torch.tensor,
-                   lr: float =2e-2,
                    iter_times: int = 10) -> torch.tensor:
         """Find the optimal latent vectors z for labels y.
 
@@ -346,38 +345,19 @@ class AttackPLGMI(AbstractMINV):
         z = torch.randn(bs, self.generator.dim_z, device=self.device, requires_grad=True)
         z.requires_grad = True
 
-        optimizer = torch.optim.Adam([z], lr=lr)
+        optimizer = torch.optim.Adam([z], lr=self.configs.z_optimization_lr)
 
         for i in range(iter_times):
-
             # Generate fake images
             fake = self.generator(z, y)
 
-            if self.data_format == "dataframe":
-                # remove "pseudo_label" column from fake
-                fake = fake.drop(columns=["pseudo_label"])
-
-                out1 = self.target_model(fake)
-                out2 = self.target_model(fake)
-
-                y_one_hot = torch.nn.functional.one_hot(y, num_classes=out1.shape[1]).float()
-                # compute the loss
-                inv_loss = torch.mean((out1 - y_one_hot.float())**2) + torch.mean((out2 - y_one_hot.float())**2)
-
-            elif self.data_format == "dataloader":
-
-                out1 = self.target_model(aug_list(fake))
-                out2 = self.target_model(aug_list(fake))
-                # compute the loss
-                inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
-
-            else:
-                raise ValueError("Data format not supported")
+            out1 = self.target_model(aug_list(fake))
+            out2 = self.target_model(aug_list(fake))
+            # compute the loss
+            inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
 
             if z.grad is not None:
                 z.grad.data.zero_()
-
-            assert inv_loss.requires_grad, "inv_loss is not connected to the computational graph."
 
             # Update the latent vector z
             optimizer.zero_grad()
@@ -396,7 +376,7 @@ class AttackPLGMI(AbstractMINV):
 
         return z
 
-    def optimize_z2(self, y: torch.tensor, lr: float = 2e-2, iter_times: int = 10) -> torch.tensor:
+    def optimize_z_xgboost(self, y: torch.tensor, iter_times: int = 10) -> torch.tensor:
         """Find the optimal latent vectors z for labels y.
 
         Args:
@@ -413,83 +393,35 @@ class AttackPLGMI(AbstractMINV):
         bs = y.shape[0]  # Batch size
         y = y.view(-1).long().to(self.device)
 
-        self.generator.eval()
-        self.generator.to(self.device)
-        self.target_model.eval()
-        self.target_model.to(self.device)
-        self.evaluation_model.eval()
-        self.evaluation_model.to(self.device)
+        # Use Optuna for Bayesian optimization
+        def objective(trial: optuna.trial.Trial) -> float:
+            # Suggest values for each dimension of z
+            z_numpy = np.array([trial.suggest_float(f"z_{i}", -3, 3) for i in range(bs * self.generator.dim_z)])
+            z_numpy = z_numpy.reshape(bs, self.generator.dim_z)  # Reshape to match the required shape
 
-        # Initialize latent vector z
-        z = torch.randn(bs, self.generator.dim_z, device=self.device, requires_grad=True)
+            z_tensor = torch.tensor(z_numpy, dtype=torch.float32, device=self.device)
 
-        if self.data_format == "dataloader":
-            # Use standard torch optimizer
-            optimizer = torch.optim.Adam([z], lr=lr)
+            fake = self.generator(z_tensor, y)
+            fake = fake.drop(columns=["pseudo_label"])  # Remove pseudo_label
 
-            aug_list = augmentation.container.ImageSequential(
-            augmentation.RandomResizedCrop((64, 64), scale=(0.8, 1.0), ratio=(1.0, 1.0)),
-            augmentation.ColorJitter(brightness=0.2, contrast=0.2),
-            augmentation.RandomHorizontalFlip(),
-            augmentation.RandomRotation(5),
-              ).to(self.device) # TODO: Move this to a image modality extension and have it as an input
+            out1 = self.target_model.predict_proba(fake)  # Get class probabilities from XGBoost
+            y_one_hot = torch.nn.functional.one_hot(y, num_classes=out1.shape[1]).float().cpu().numpy()
 
+            # Compute cross-entropy loss manually
+            eps = 1e-8  # Prevent log(0)
+            return -np.sum(y_one_hot * np.log(out1 + eps)) / bs
 
-            for i in range(iter_times):
-                fake = self.generator(z, y)
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        study = optuna.create_study(direction="minimize")
 
-                out1 = self.target_model(aug_list(fake))
-                out2 = self.target_model(aug_list(fake))
+        logger.info("Optimizing z using Optuna")
+        study.optimize(objective, n_trials=iter_times, show_progress_bar=True, n_jobs=-1)
 
-                inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
+        # Convert the dictionary values to a NumPy array
+        z_numpy = np.array(list(study.best_params.values()))
 
-                optimizer.zero_grad()
-                inv_loss.backward()
-                optimizer.step()
+        # Reshape the array to match the required shape (bs, self.generator.dim_z)
+        z_numpy = z_numpy.reshape(bs, self.generator.dim_z)
 
-                if (i + 1) % self.log_interval == 0:
-                    with torch.no_grad():
-                        eval_prob = self.evaluation_model(fake)
-                        eval_iden = torch.argmax(eval_prob, dim=1)
-                        acc = (eval_iden == y).float().mean().item()
-                        logger.info(f"Iteration:{i+1}\tInv Loss:{inv_loss.item():.2f}\tAttack Acc:{acc:.2f}")
-
-        elif self.data_format == "dataframe":
-            # Use Optuna for Bayesian optimization
-            def objective(trial: optuna.trial.Trial) -> float:
-                # Suggest values for each dimension of z
-                z_numpy = np.array([trial.suggest_float(f"z_{i}", -3, 3) for i in range(bs * self.generator.dim_z)])
-                z_numpy = z_numpy.reshape(bs, self.generator.dim_z)  # Reshape to match the required shape
-
-                z_tensor = torch.tensor(z_numpy, dtype=torch.float32, device=self.device)
-
-                fake = self.generator(z_tensor, y)
-                fake = fake.drop(columns=["pseudo_label"])  # Remove pseudo_label
-
-                out1 = self.target_model.predict_proba(fake)  # Get class probabilities from XGBoost
-                y_one_hot = torch.nn.functional.one_hot(y, num_classes=out1.shape[1]).float().cpu().numpy()
-
-                # Compute cross-entropy loss manually
-                eps = 1e-8  # Prevent log(0)
-                return -np.sum(y_one_hot * np.log(out1 + eps)) / bs
-
-
-            optuna.logging.set_verbosity(optuna.logging.WARNING)
-            study = optuna.create_study(direction="minimize")
-
-            logger.info("Optimizing z using Optuna")
-            study.optimize(objective, n_trials=iter_times, show_progress_bar=True, n_jobs=-1)
-
-            # Convert the dictionary values to a NumPy array
-            z_numpy = np.array(list(study.best_params.values()))
-
-            # Reshape the array to match the required shape (bs, self.generator.dim_z)
-            z_numpy = z_numpy.reshape(bs, self.generator.dim_z)
-
-            # Convert the NumPy array to a PyTorch tensor
-            z = torch.tensor(z_numpy, dtype=torch.float32, device=self.device)
-
-        else:
-            raise ValueError("Unsupported data format")
-
-        return z
+        # Convert the NumPy array to a PyTorch tensor
+        return torch.tensor(z_numpy, dtype=torch.float32, device=self.device)
