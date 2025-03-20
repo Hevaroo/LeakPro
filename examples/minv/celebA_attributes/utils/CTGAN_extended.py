@@ -154,7 +154,8 @@ class CustomCTGAN(CTGAN):
         epochs = self._epochs
         self._validate_discrete_columns(train_data, discrete_columns)
         self._validate_null_data(train_data, discrete_columns)
-
+        
+        #print(train_data["pseudo_label"].unique().shape)
         
         self._transformer.fit(train_data, discrete_columns)
 
@@ -191,6 +192,35 @@ class CustomCTGAN(CTGAN):
         std = mean + 1
 
         self.loss_values = pd.DataFrame(columns=['Epoch', 'Generator Loss', 'Distriminator Loss', 'Inversion Loss'])
+        
+        # in c1 some columns are 0, some are 1. It is a one-hot encoded vector
+        # the last x columns are the pseudo-labels, find which columns represent the pseudo-labels
+        
+        
+        def sample_pseudo_c1(batch_size):
+            
+            condition_column = "pseudo_label"
+            condition_value = np.random.randint(0, num_classes)
+            #condition_value = condition_value.astype('str')
+
+            try:
+                warnings.filterwarnings('ignore') 
+
+                condition_info = self._transformer.convert_column_name_value_to_id(
+                    condition_column, condition_value
+                )
+                
+                global_condition_vec = self._data_sampler.generate_cond_from_condition_column_info(
+                    condition_info, batch_size
+                )
+
+            except ValueError:
+                # If the transformer has not seen the condition value in training, it will raise a ValueError
+                # We still want to be able to sample, so we set the global_condition_vec to None
+                global_condition_vec = None
+
+            return global_condition_vec
+        
 
         epoch_iterator = tqdm(range(epochs), disable=(not self._verbose))
         if self._verbose:
@@ -227,12 +257,18 @@ class CustomCTGAN(CTGAN):
                         c2 = c1[perm]
                     """
                     
-                    condvec = self._data_sampler.sample_condvec(self._batch_size)
+                    #condvec = self._data_sampler.sample_condvec(self._batch_size)
                                         
-                    c1 = condvec[0]
-                                        
-                    c1 = torch.from_numpy(c1).to(self._device)
+                    #c1 = condvec[0]
+                    
+                    
+                    c1 = sample_pseudo_c1(self._batch_size)
+                    
+                    if c1 is None:                   
+                        c1 = self._data_sampler.sample_original_condvec(self._batch_size)
 
+                    
+                    c1 = torch.from_numpy(c1).to(self._device)
                     
                     fakez = torch.cat([fakez, c1], dim=1)
                     
@@ -273,17 +309,15 @@ class CustomCTGAN(CTGAN):
                 fakez = torch.normal(mean=mean, std=std)
                 condvec = self._data_sampler.sample_condvec(self._batch_size)
                 
-                if condvec is None:
-                    c1, m1, col, opt = None, None, None, None
-                else:
-                    c1, m1, col, opt = condvec
-                    c1 = torch.from_numpy(c1).to(self._device)
-                    m1 = torch.from_numpy(m1).to(self._device)
-                    fakez = torch.cat([fakez, c1], dim=1)
+                c1 = sample_pseudo_c1(self._batch_size)
                 
-                #c1 = torch.randint(0, num_classes, (self._batch_size,), device=self._device)
-                #fakez = torch.cat([fakez, c1.unsqueeze(1)], dim=1)
-
+                if c1 is None:                   
+                    c1 = self._data_sampler.sample_original_condvec(self._batch_size)
+                
+                c1 = torch.from_numpy(c1).to(self._device)
+                
+                fakez = torch.cat([fakez, c1], dim=1)
+                    
 
                 fake = self._generator(fakez)
                 fakeact = self._apply_activate(fake)

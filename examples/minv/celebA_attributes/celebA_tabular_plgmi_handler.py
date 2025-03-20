@@ -141,9 +141,9 @@ class CelebA_InputHandler(AbstractInputHandler):
         # add 'pseudo_label' to the discrete columns
         discrete_columns = discrete_columns.append(pd.Index(['pseudo_label']))
         
-        print(discrete_columns)
+        #print(discrete_columns)
         
-        print(pseudo_loader.dataset.head())
+        #print(pseudo_loader.dataset.head())
         # ctgan takes dataframe or numpy array as input
         ctgan.fit(train_data= pseudo_loader.dataset, 
                     target_model=target_model,
