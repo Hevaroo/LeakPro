@@ -6,9 +6,10 @@ from tqdm import tqdm
 from leakpro import AbstractInputHandler
 from leakpro.attacks.utils import gan_losses
 from leakpro.schemas import TrainingOutput
-import kornia
-import time
-from examples.minv.celebA_attributes.utils.CTGAN_extended import CustomCTGAN
+
+import cudf
+cudf.pandas.set_option('use_gpu', True)  # Enable GPU for pandas operations
+
 import pandas as pd
 
 class CelebA_InputHandler(AbstractInputHandler):
