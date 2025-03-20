@@ -39,11 +39,14 @@ class CustomCTGAN(CTGAN):
         self._transformer = DataTransformer()
         
     def to(self, device):
-        pass
+        self._device = device
+        self._generator.to(device)
+
     
     def eval(self):
-        pass
-    
+        self._generator.eval()
+
+        
     def __call__(self, z=None, y=None):
         """Sample data similar to the training data.
 

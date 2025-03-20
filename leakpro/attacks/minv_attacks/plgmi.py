@@ -392,6 +392,9 @@ class AttackPLGMI(AbstractMINV):
         """
         bs = y.shape[0]  # Batch size
         y = y.view(-1).long().to(self.device)
+        self.generator.eval()
+        self.generator.to(self.device)
+
 
         # Use Optuna for Bayesian optimization
         def objective(trial: optuna.trial.Trial) -> float:
