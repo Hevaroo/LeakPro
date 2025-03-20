@@ -93,7 +93,7 @@ def train_xgboost_model(train_data, train_labels, test_data, test_labels, log_di
             test_acc=test_acc,
             train_loss=train_loss,
             test_loss=0,
-            dataset="celebA_attributes"
+            dataset="mimic-iv"
         )
 
     with open("target/model_metadata.pkl", "wb") as f:

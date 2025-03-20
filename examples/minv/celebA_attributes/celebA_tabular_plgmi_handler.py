@@ -7,9 +7,6 @@ from leakpro import AbstractInputHandler
 from leakpro.attacks.utils import gan_losses
 from leakpro.schemas import TrainingOutput
 
-import cudf
-cudf.pandas.set_option('use_gpu', True)  # Enable GPU for pandas operations
-
 import pandas as pd
 
 class CelebA_InputHandler(AbstractInputHandler):

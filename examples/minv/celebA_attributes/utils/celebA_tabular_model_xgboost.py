@@ -2,6 +2,7 @@ import xgboost as xgb
 import pickle
 import os
 import numpy as np
+import cupy as cp
 from sklearn.metrics import accuracy_score, log_loss
 import torch
 from leakpro.schemas import MIAMetaDataSchema, OptimizerConfig, LossConfig
@@ -29,14 +30,18 @@ class xgboost_model(xgb.XGBClassifier):
 
     def eval(self):
         pass
-
+    
     def __call__(self, entry):
         """Make the model callable with PyTorch tensors."""
         if isinstance(entry, torch.Tensor):
-            entry = entry.detach().cpu().numpy()  # Convert to NumPy array
-        
+            # Convert PyTorch tensor to CuPy array directly on GPU
+            if entry.is_cuda:
+                entry = cp.from_dlpack(torch.to_dlpack(entry))
+            else:
+                entry = cp.asarray(entry.detach().numpy(), order='C')
+            
         output = self.predict_proba(entry)  # Get class probabilities
-        return torch.tensor(output, dtype=torch.float32)  # Convert back to Tensor
+        return torch.from_dlpack(cp.array(np.from_dlpack(output)))  # Convert back to PyTorch tensor
     
     def to(self, device):
         """Override the to method to make it compatible with PyTorch models."""
