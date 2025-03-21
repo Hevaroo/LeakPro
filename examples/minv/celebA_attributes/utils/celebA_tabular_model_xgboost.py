@@ -14,13 +14,13 @@ class xgboost_model(xgb.XGBClassifier):
         params = {
         "objective": "multi:softmax",  # Change to "multi:softmax" for multi-class
         "eval_metric": "mlogloss",
-        "learning_rate": 0.1,
+        "learning_rate": 0.5,
         "max_depth": 6,
-        "n_estimators": 1000,
+        "n_estimators": 100,
         "subsample": 0.5,
-        "colsample_bytree": 1.0,
+        "colsample_bytree": 0.8,
         "reg_lambda": 1.0,
-        "reg_alpha": 0.0,
+        "reg_alpha": 0.01,
         "random_state": 42,
         "tree_method": "hist",
         "device": device

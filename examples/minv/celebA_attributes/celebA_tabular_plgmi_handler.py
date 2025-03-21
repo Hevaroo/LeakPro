@@ -6,6 +6,7 @@ from tqdm import tqdm
 from leakpro import AbstractInputHandler
 from leakpro.attacks.utils import gan_losses
 from leakpro.schemas import TrainingOutput
+import pickle
 
 import pandas as pd
 
@@ -151,9 +152,11 @@ class CelebA_InputHandler(AbstractInputHandler):
                     dis_criterion=dis_criterion,
                     alpha=alpha,
                     discrete_columns=discrete_columns)
-        #ctgan.save('ctgan.pth')
         
-        print(ctgan.sample(10))
+        # pickle dump ctgan
+        with open('ctgan.pkl', 'wb') as f:
+            pickle.dump(ctgan, f)
+        
 
         
     
