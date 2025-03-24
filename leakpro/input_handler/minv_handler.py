@@ -105,7 +105,7 @@ class MINVHandler:
         try:
             if model_type == "pytorch_tabular":
                 # Loads model from path instead of file
-                self.target_model = TabularModel.load_model(model_path)
+                self.target_model = self.target_model_blueprint.load_model(model_path)
             else:
                 with open(self.model_path, "rb") as f:
                     if model_type == "torch":

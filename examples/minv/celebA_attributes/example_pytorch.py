@@ -36,8 +36,7 @@ df_val = df.drop(df_train.index)
 # For all entries in df_val, if the identity is not in df_train, remove it
 df_val = df_val[df_val["identity"].isin(df_train["identity"])]
 df_val = df_val.reset_index(drop=True)
-
-'''
+"""
 # Continous column names
 continuous_col_names = ["lefteye_x", "lefteye_y", "righteye_x", "righteye_y","nose_x", "nose_y", "leftmouth_x", "leftmouth_y", "rightmouth_x", "rightmouth_y"]
 # Categorical column names, the rest are categorical
@@ -84,8 +83,7 @@ tabular_model.save_model("./target")
 
 
 
-'''
-
+"""
 
 #tabular_model = TabularModel.load_model("./target")
 

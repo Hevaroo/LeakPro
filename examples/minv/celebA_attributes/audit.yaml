@@ -49,8 +49,8 @@ audit:  # Configurations for auditing
 
 target:
   # Target model path
-  module_path: "./utils/celebA_tabular_model_xgboost.py"
-  model_class: "xgboost_model"
+  module_path: "./utils/tabular_wrapper.py"
+  model_class: "TabularWrapper"
   model_type: "pytorch_tabular"
   # Data paths
   target_folder: "./target"
