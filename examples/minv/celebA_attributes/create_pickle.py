@@ -13,6 +13,9 @@ combined_df = pd.concat([attributes_df, landmarks_df, identities_df], axis=1)
 # Sort the dataframe by identity
 combined_df.sort_values('identity', inplace=True)
 
+# Numerical categories are now integers, we want them to be float32s
+combined_df = combined_df.astype('float32')
+
 split_location = combined_df.iloc[-1]['identity'] // 2
 
 # Split the dataframe into two
