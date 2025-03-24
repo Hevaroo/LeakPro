@@ -6,15 +6,17 @@ landmarks_df = pd.read_csv('data/list_landmarks_align_celeba.txt', delim_whitesp
 # Identities has no header, so we need to specify it, use first column as index and rename the second column to 'identity'
 identities_df = pd.read_csv('data/identity_CelebA.txt', delim_whitespace=True, header=None, index_col=0, names=['identity'])
 
-
 # Combine the two dataframes
-combined_df = pd.concat([attributes_df, landmarks_df, identities_df], axis=1)
-
-# Sort the dataframe by identity
-combined_df.sort_values('identity', inplace=True)
+combined_df = pd.concat([attributes_df, landmarks_df], axis=1)
 
 # Numerical categories are now integers, we want them to be float32s
 combined_df = combined_df.astype('float32')
+
+# Now combine with the identities dataframe
+combined_df = pd.concat([combined_df, identities_df], axis=1)
+
+# Sort the dataframe by identity
+combined_df.sort_values('identity', inplace=True)
 
 split_location = combined_df.iloc[-1]['identity'] // 2
 
