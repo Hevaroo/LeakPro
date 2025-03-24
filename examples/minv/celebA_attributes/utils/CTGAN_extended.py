@@ -70,9 +70,8 @@ class CustomCTGAN(CTGAN):
 
         condition_column = "pseudo_label"
         condition_values = y.detach().cpu().numpy()
-        #condition_column = None
-        #condition_value = None
-        
+
+        # TODO: Check this logic
         condition_values = condition_values[:1]
         
         if y is not None:
@@ -131,7 +130,7 @@ class CustomCTGAN(CTGAN):
             samples = pd.concat([samples, sample])
         return samples
 
-    def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, alpha = 0.1, discrete_columns=()):
+    def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, alpha = 0.1, discrete_columns=(), use_inv_loss=True):
         """
         Fit the CTGAN model to the training data using pseudo-labeled guidance as in the PLG-MI attack.
 
@@ -196,15 +195,14 @@ class CustomCTGAN(CTGAN):
 
         self.loss_values = pd.DataFrame(columns=['Epoch', 'Generator Loss', 'Distriminator Loss', 'Inversion Loss'])
         
-        # in c1 some columns are 0, some are 1. It is a one-hot encoded vector
-        # the last x columns are the pseudo-labels, find which columns represent the pseudo-labels
-        
-        
+
         def sample_pseudo_c1(batch_size):
-            
+            """
+            sample conditional vector c1 from the pseudo-labels
+            """
+                
             condition_column = "pseudo_label"
             condition_value = np.random.randint(0, num_classes)
-            #condition_value = condition_value.astype('str')
 
             try:
                 warnings.filterwarnings('ignore') 
@@ -240,18 +238,6 @@ class CustomCTGAN(CTGAN):
                     fakez = torch.normal(mean=mean, std=std)
 
                     """
-                    condvec = self._data_sampler.sample_condvec(self._batch_size)
-                    if condvec is None:
-                        c1, m1, col, opt = None, None, None, None
-                        real = self._data_sampler.sample_data(
-                            train_data, self._batch_size, col, opt
-                        )
-                    else:
-                        c1, m1, col, opt = condvec
-                        c1 = torch.from_numpy(c1).to(self._device)
-                        m1 = torch.from_numpy(m1).to(self._device)
-                        fakez = torch.cat([fakez, c1], dim=1)
-
                         perm = np.arange(self._batch_size)
                         np.random.shuffle(perm)
                         real = self._data_sampler.sample_data(
@@ -259,29 +245,19 @@ class CustomCTGAN(CTGAN):
                         )
                         c2 = c1[perm]
                     """
-                    
-                    #condvec = self._data_sampler.sample_condvec(self._batch_size)
-                                        
-                    #c1 = condvec[0]
-                    
-                    
+                    # Sample conditional vector c1 from the pseudo-labels
                     c1 = sample_pseudo_c1(self._batch_size)
                     
                     if c1 is None:                   
                         c1 = self._data_sampler.sample_original_condvec(self._batch_size)
 
-                    
                     c1 = torch.from_numpy(c1).to(self._device)
                     
                     fakez = torch.cat([fakez, c1], dim=1)
                     
-                    #c1 = torch.randint(0, num_classes, (self._batch_size,), device=self._device)
-                    
-                    #fakez = torch.cat([fakez, c1.unsqueeze(1)], dim=1)
-
+                    # Sample real data
                     real = self._data_sampler.sample_data(train_data, self._batch_size, col=None, opt=None)
                     
-
                     fake = self._generator(fakez)
                     fakeact = self._apply_activate(fake)
 
@@ -344,7 +320,7 @@ class CustomCTGAN(CTGAN):
                 sample = sample.drop(columns=['pseudo_label'])                
                 
 
-                if condvec is None:
+                if condvec is None or not use_inv_loss:
                     inv_loss = 0
                 else:
                     inv_loss  = inv_criterion(target_model(sample), pseudo_label_batch)
@@ -377,5 +353,9 @@ class CustomCTGAN(CTGAN):
                 epoch_iterator.set_description(
                     description.format(gen=generator_loss, dis=discriminator_loss, inv=inversion_loss)
                 )
-
-
+                
+    def save(self, path):
+        """Save the model to the specified path."""
+        torch.save(self._generator.state_dict(), path)
+        #self._transformer.save('transformer_' + path)
+        #self.loss_values.to_csv(path + '/loss_values.csv', index=False)
