@@ -153,7 +153,7 @@ class CelebA_InputHandler(AbstractInputHandler):
                     dis_criterion=dis_criterion,
                     alpha=alpha,
                     discrete_columns=discrete_columns,
-                    use_inv_loss=False)
+                    use_inv_loss=True)
         
         
         ctgan.save("ctgan.pth")
