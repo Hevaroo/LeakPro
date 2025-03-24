@@ -51,7 +51,7 @@ target:
   # Target model path
   module_path: "./utils/celebA_tabular_model_xgboost.py"
   model_class: "xgboost_model"
-  model_type: "xgboost"
+  model_type: "pytorch_tabular"
   # Data paths
   target_folder: "./target"
   data_path: "./data/private_df.pkl"

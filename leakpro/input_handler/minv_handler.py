@@ -5,6 +5,7 @@ import joblib
 import pandas as pd
 import torch
 from pydantic import BaseModel
+from pytorch_tabular import TabularModel
 from torch.utils.data import DataLoader
 
 from leakpro.input_handler.user_imports import get_class_from_module, import_module_from_file
@@ -66,6 +67,12 @@ class MINVHandler:
         """Get the target model metadata from the trained model metadata file."""
         # Access configs, read model_type
         target_model_metadata_path = self.configs.target.target_folder
+        model_type = self.configs.target.model_type
+
+        if model_type == "pytorch_tabular":
+            logger.info("Model type is pytorch_tabular, skipping loading metadata.")
+            return
+
         if target_model_metadata_path is None:
             raise ValueError("Trained model metadata path not found in configs.")
         try:
@@ -93,18 +100,22 @@ class MINVHandler:
         if model_path is None:
             raise ValueError("Trained model path not found in configs.")
         self.model_path = f"{model_path}/target_model.pkl"
-        init_params = self.target_model_metadata.init_params
         # This handles if target model is torch or not...
-
+        # TODO: CLEANUP
         try:
-            with open(self.model_path, "rb") as f:
-                if model_type == "torch":
-                    self.target_model = self.target_model_blueprint(**init_params)
-                    self.target_model.load_state_dict(torch.load(f))
-                elif model_type == "xgboost":
-                    self.target_model = joblib.load(f)
-                else:
-                    raise ValueError(f"Model type {model_type} not supported.")
+            if model_type == "pytorch_tabular":
+                # Loads model from path instead of file
+                self.target_model = TabularModel.load_model(model_path)
+            else:
+                with open(self.model_path, "rb") as f:
+                    if model_type == "torch":
+                        init_params = self.target_model_metadata.init_params
+                        self.target_model = self.target_model_blueprint(**init_params)
+                        self.target_model.load_state_dict(torch.load(f))
+                    elif model_type == "xgboost":
+                        self.target_model = joblib.load(f)
+                    else:
+                        raise ValueError(f"Model type {model_type} not supported.")
             logger.info(f"Loaded target model from {model_path}")
         except FileNotFoundError as e:
             raise FileNotFoundError(f"Could not find the trained target model at {model_path}") from e
