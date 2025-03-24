@@ -9,6 +9,9 @@ import pandas as pd
 import omegaconf
 import torch
 
+import warnings
+warnings.filterwarnings("ignore")
+
 
 # Path to the dataset zip file
 data_folder = "./data"
@@ -36,7 +39,7 @@ df_val = df.drop(df_train.index)
 # For all entries in df_val, if the identity is not in df_train, remove it
 df_val = df_val[df_val["identity"].isin(df_train["identity"])]
 df_val = df_val.reset_index(drop=True)
-
+"""
 # Continous column names
 continuous_col_names = ["lefteye_x", "lefteye_y", "righteye_x", "righteye_y","nose_x", "nose_y", "leftmouth_x", "leftmouth_y", "rightmouth_x", "rightmouth_y"]
 # Categorical column names, the rest are categorical
@@ -53,7 +56,7 @@ data_config = DataConfig(
 trainer_config = TrainerConfig(
     auto_lr_find=True,
     batch_size=train_config["train"]["batch_size"],
-    max_epochs=5,
+    max_epochs=100,
 )
 
 optimizer_config = OptimizerConfig()
@@ -80,11 +83,11 @@ pred_df = tabular_model.predict(df_val)
 # Save the model
 tabular_model.save_model("./target")
 
-
+"""
 #tabular_model = TabularModel.load_model("./target")
 
-'''
-public_loader = get_celebA_publicloader(train_config)
+
+#public_loader = get_celebA_publicloader(train_config)
 
 from leakpro import LeakPro
 from examples.minv.celebA_attributes.celebA_tabular_plgmi_handler import CelebA_InputHandler
@@ -95,5 +98,4 @@ config_path = "audit.yaml"
 leakpro = LeakPro(CelebA_InputHandler, config_path)
 
 # Run the audit
-results = leakpro.run_audit(return_results=True)'
-'''
+results = leakpro.run_audit(return_results=True)
