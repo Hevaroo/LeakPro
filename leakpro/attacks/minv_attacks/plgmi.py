@@ -149,6 +149,8 @@ class AttackPLGMI(AbstractMINV):
             outputs = self.target_model(public_data)
             confidences = F.softmax(outputs, dim=1)
             all_confidences.append(confidences)
+
+
         else:
             raise ValueError("Data format not supported")
 
