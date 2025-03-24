@@ -296,8 +296,14 @@ class AttackPLGMI(AbstractMINV):
 
         elif self.data_format == "dataframe":
             # generate samples from the generator
-            opt_z = self.optimize_z_no_grad(y=labels,
+
+            if self.handler.configs.target.model_type == "xgboost":
+                opt_z = self.optimize_z_no_grad(y=labels,
                                 iter_times=self.configs.z_optimization_iter).to(self.device)
+            elif self.handler.configs.target.model_type == "pytorch_tabular":
+                opt_z = self.optimize_z_grad(y=labels,
+                                iter_times=self.configs.z_optimization_iter, augment=False).to(self.device)
+
 
 
             pre_z_opt = TabularMetrics(self.handler, self.gan_handler,
@@ -316,7 +322,8 @@ class AttackPLGMI(AbstractMINV):
 
     def optimize_z_grad(self:Self,
                    y: torch.tensor,
-                   iter_times: int = 10) -> torch.tensor:
+                   iter_times: int = 10,
+                   augment: bool = True) -> torch.tensor:
         """Find the optimal latent vectors z for labels y.
 
         Args:
@@ -336,12 +343,16 @@ class AttackPLGMI(AbstractMINV):
         self.evaluation_model.eval()
         self.evaluation_model.to(self.device)
 
-        aug_list = augmentation.container.ImageSequential(
-            augmentation.RandomResizedCrop((64, 64), scale=(0.8, 1.0), ratio=(1.0, 1.0)),
-            augmentation.ColorJitter(brightness=0.2, contrast=0.2),
-            augmentation.RandomHorizontalFlip(),
-            augmentation.RandomRotation(5),
-        ).to(self.device) # TODO: Move this to a image modality extension and have it as an input
+        if augment:
+            aug_list = augmentation.container.ImageSequential(
+                augmentation.RandomResizedCrop((64, 64), scale=(0.8, 1.0), ratio=(1.0, 1.0)),
+                augmentation.ColorJitter(brightness=0.2, contrast=0.2),
+                augmentation.RandomHorizontalFlip(),
+                augmentation.RandomRotation(5),
+            ).to(self.device) # TODO: Move this to a image modality extension and have it as an input
+        else:
+            def aug_list(x):  # noqa: ANN001, ANN202
+                return x
 
         logger.info("Optimizing z for the PLG-MI attack")
 
