@@ -27,7 +27,7 @@ audit:  # Configurations for auditing
         init_params:
           embedding_dim: *dim_z
           verbose: True
-          epochs: 1
+          epochs: 50
           #num_classes: *n_cls
           #bottom_width: 4
       discriminator:
@@ -39,7 +39,7 @@ audit:  # Configurations for auditing
   reconstruction:
     batch_size: 32 # Integer number for indicating batch size in reconstruction
     num_class_samples: 5 # Number of samples to generate for each class
-    num_audited_classes: 100 # Number of classes to audit
+    num_audited_classes: 50 # Number of classes to audit
     metrics:
       accuracy:
 

@@ -334,7 +334,10 @@ class CustomCTGAN(CTGAN):
 
             generator_loss = loss_g.detach().cpu().item()
             discriminator_loss = loss_d.detach().cpu().item()
-            inversion_loss = inv_loss.detach().cpu().item()
+            if use_inv_loss:
+                inversion_loss = inv_loss.detach().cpu().item()
+            else:
+                inversion_loss = 0
 
             epoch_loss_df = pd.DataFrame({
                 'Epoch': [i],

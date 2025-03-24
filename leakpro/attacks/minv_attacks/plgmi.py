@@ -148,9 +148,10 @@ class AttackPLGMI(AbstractMINV):
 
             # If cuda is available and public_data is pandas, make public data cudf
             if torch.cuda.is_available() and isinstance(public_data, pd.DataFrame):
-                public_data = cudf.DataFrame.from_pandas(public_data)
-
-            outputs = self.target_model(public_data)
+                public_data_cudf = cudf.DataFrame.from_pandas(public_data)
+                outputs = self.target_model(public_data_cudf)
+            else:
+                outputs = self.target_model(public_data)
             confidences = F.softmax(outputs, dim=1)
             all_confidences.append(confidences)
         else:
@@ -192,8 +193,10 @@ class AttackPLGMI(AbstractMINV):
                     pseudo_entry = public_data.iloc[index].copy()
                     pseudo_entry["pseudo_label"] = i
                     pseudo_data.append(pseudo_entry)
-
-            pseudo_data = pd.DataFrame(pseudo_data)
+            if torch.cuda.is_available() and isinstance(public_data, cudf.DataFrame):
+                pseudo_data = cudf.DataFrame(pseudo_data)
+            else:
+                pseudo_data = pd.DataFrame(pseudo_data)
         logger.info("Created pseudo dataloader")
         # pseudo_data is now a list of tuples (entry, pseudo_label)
         # We want to set the default device to the sampler in the returned dataloader
