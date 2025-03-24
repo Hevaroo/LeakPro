@@ -1,6 +1,7 @@
 """Implementation of the PLGMI attack."""
 from typing import Any, Dict, Optional
 
+import cudf
 import numpy as np
 import optuna
 import pandas as pd
@@ -144,6 +145,10 @@ class AttackPLGMI(AbstractMINV):
 
             # remove "identity" column from dataset
             public_data = self.public_dataloader.dataset.drop(columns=["identity"])
+
+            # If cuda is available and public_data is pandas, make public data cudf
+            if torch.cuda.is_available() and isinstance(public_data, pd.DataFrame):
+                public_data = cudf.DataFrame.from_pandas(public_data)
 
             outputs = self.target_model(public_data)
             confidences = F.softmax(outputs, dim=1)
