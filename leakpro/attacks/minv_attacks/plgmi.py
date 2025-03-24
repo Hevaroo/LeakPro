@@ -193,6 +193,8 @@ class AttackPLGMI(AbstractMINV):
             else:
                 pseudo_data = pd.DataFrame(pseudo_data)
         logger.info("Created pseudo dataloader")
+
+        print(pseudo_data)
         # pseudo_data is now a list of tuples (entry, pseudo_label)
         # We want to set the default device to the sampler in the returned dataloader
         # to be on device, does not apply when using CTGAN

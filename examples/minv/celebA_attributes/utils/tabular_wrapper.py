@@ -9,6 +9,8 @@ class TabularWrapper(TabularModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        
     def __call__(self, entry):
         """Make the model callable with PyTorch tensors."""
                # Convert the DataFrame into a dataloader (pytorch_tabular handles formatting)
@@ -18,7 +20,7 @@ class TabularWrapper(TabularModel):
 
         # No 'torch.no_grad()' here because we want to keep the computation graph for backprop
         for batch in inference_dataloader:
-
+            # Send batch to device            
             # Perform forward pass to get model output
             out = self.model.forward(batch)
 
@@ -31,6 +33,7 @@ class TabularWrapper(TabularModel):
         return tensor_output
 
     def to(self, device):
+        self.model.to(device)
         pass
     
     def eval(self):
