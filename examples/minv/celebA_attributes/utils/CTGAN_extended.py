@@ -21,12 +21,12 @@ class CustomCTGAN(CTGAN):
                  discriminator_lr=0.0002, 
                  discriminator_decay=0.000001,
                  num_classes=5088,
-                 batch_size=100, 
+                 batch_size=1000, 
                  discriminator_steps=1, 
                  log_frequency=True, 
                  verbose=False, 
                  epochs=300, 
-                 pac=10, 
+                 pac=100, 
                  cuda=True):
         
         self.dim_z = embedding_dim
