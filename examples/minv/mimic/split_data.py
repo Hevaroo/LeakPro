@@ -6,7 +6,14 @@ df = pd.read_pickle("data/df.pkl")
 # replace missing values with 0
 #df.fillna(-1, inplace=True)
 
+continuous_col_names = ['length_of_stay', 'num_procedures', 'num_medications', 'BMI',
+       'BMI (kg/m2)', 'Height', 'Height (Inches)', 'Weight', 'Weight (Lbs)',
+       'eGFR', 'systolic', 'diastolic']
 
+# In the continuous columns, replace missing values with the mean
+for col in continuous_col_names:
+    df[col].fillna(df[col].mean(), inplace=True)
+     
 
 # Split the data into public and private based on "icd_code"
 

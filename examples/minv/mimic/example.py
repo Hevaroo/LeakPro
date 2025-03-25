@@ -3,7 +3,7 @@ import sys
 import yaml
 import pickle
 from pytorch_tabular import TabularModel
-from pytorch_tabular.models import CategoryEmbeddingModelConfig
+from pytorch_tabular.models import CategoryEmbeddingModelConfig, TabNetModelConfig, GANDALFConfig
 from pytorch_tabular.config import DataConfig, OptimizerConfig, TrainerConfig
 import pandas as pd
 import omegaconf
@@ -64,7 +64,7 @@ if train:
         continuous_cols=continuous_col_names,
         categorical_cols=categorical_col_names,
         #continuous_feature_transform="quantile_normal",
-        #normalize_continuous_features=True,
+        normalize_continuous_features=True,
     )
 
     trainer_config = TrainerConfig(
@@ -76,11 +76,17 @@ if train:
 
     optimizer_config = OptimizerConfig()
 
-    model_config = CategoryEmbeddingModelConfig(
-        task="classification",
-        layers="1024-512-512",
-        activation="ReLU",
-        learning_rate=1e-3
+    # model_config = CategoryEmbeddingModelConfig(
+    #     task="classification",
+    #     layers="1024-512-512",
+    #     activation="ReLU",
+    #     learning_rate=1e-3
+    # )
+
+    model_config = GANDALFConfig(
+    task="classification",
+    gflu_stages=16,
+    learning_rate=1e-3,
     )
 
     tabular_model = TabularModel(
