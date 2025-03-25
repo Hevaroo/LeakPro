@@ -29,7 +29,17 @@ with open('train_config.yaml', 'r') as file:
 path = os.path.join(os.getcwd(), train_config["data"]["data_dir"])
 data_dir =  train_config["data"]["data_dir"] + "/private_df.pkl"
 
-train = False
+df = pd.read_pickle(data_dir)
+
+df_train = df.sample(frac=train_config["data"]["f_train"], random_state=123)
+df_val = df.drop(df_train.index)
+# For all entries in df_val, if the identity is not in df_train, remove it
+df_val = df_val[df_val["identity"].isin(df_train["identity"])]
+df_val = df_val.reset_index(drop=True)
+
+
+
+train = True
 if train:
     #train_loader, test_loader = get_celebA_train_testloader(train_config, random_state=123)
 
@@ -45,13 +55,15 @@ if train:
     continuous_col_names = ["lefteye_x", "lefteye_y", "righteye_x", "righteye_y","nose_x", "nose_y", "leftmouth_x", "leftmouth_y", "rightmouth_x", "rightmouth_y"]
     # Categorical column names, the rest are categorical
     categorical_col_names = [col for col in df.columns if col not in continuous_col_names]
+    # Remove the target column
+    categorical_col_names.remove("identity")
 
     data_config = DataConfig(
         target=['identity'],
         continuous_cols=continuous_col_names,
         categorical_cols=categorical_col_names,
-        continuous_feature_transform="quantile_normal",
-        normalize_continuous_features=True,
+        #continuous_feature_transform="quantile_normal",
+        #normalize_continuous_features=True,
     )
 
     trainer_config = TrainerConfig(
@@ -78,18 +90,31 @@ if train:
 
     tabular_model.fit(train=df_train, validation=df_val)
     results = tabular_model.evaluate(df_val)
-    pred_df = tabular_model.predict(df_val)
+    pred_df = tabular_model.predict(df_val.drop(columns=["identity"]))
 
-
+    print("validation preds: ", pred_df["identity_prediction"].value_counts())
     # Save the model
     tabular_model.save_model("./target")
 
 
-    #tabular_model = TabularModel.load_model("./target")
+tabular_model = TabularModel.load_model("./target")
 
 
-    #public_loader = get_celebA_publicloader(train_config)
+public_loader = pd.read_pickle(data_folder + "/public_df.pkl")
 
+print(public_loader)
+
+
+# Take 10 samples from the public dataloader, use target model to predict
+# Get the number of classes in the target model
+x_test = public_loader
+x_test = x_test.drop(columns=["identity"])
+y_test = tabular_model.predict(x_test)
+# Print the predictions
+print("public preds: ",  y_test["identity_prediction"].value_counts())
+
+
+'''
 from leakpro import LeakPro
 from examples.minv.celebA_attributes.celebA_tabular_plgmi_handler import CelebA_InputHandler
 config_path = "audit.yaml"
@@ -100,3 +125,4 @@ leakpro = LeakPro(CelebA_InputHandler, config_path)
 
 # Run the audit
 results = leakpro.run_audit(return_results=True)
+'''
