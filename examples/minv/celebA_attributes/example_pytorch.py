@@ -39,7 +39,7 @@ df_val = df_val.reset_index(drop=True)
 
 
 
-train = True
+train = False
 if train:
     #train_loader, test_loader = get_celebA_train_testloader(train_config, random_state=123)
 
@@ -70,6 +70,7 @@ if train:
         auto_lr_find=True,
         batch_size=train_config["train"]["batch_size"],
         max_epochs=100,
+        early_stopping='train_loss_0'
     )
 
     optimizer_config = OptimizerConfig()
@@ -97,24 +98,7 @@ if train:
     tabular_model.save_model("./target")
 
 
-tabular_model = TabularModel.load_model("./target")
 
-
-public_loader = pd.read_pickle(data_folder + "/public_df.pkl")
-
-print(public_loader)
-
-
-# Take 10 samples from the public dataloader, use target model to predict
-# Get the number of classes in the target model
-x_test = public_loader
-x_test = x_test.drop(columns=["identity"])
-y_test = tabular_model.predict(x_test)
-# Print the predictions
-print("public preds: ",  y_test["identity_prediction"].value_counts())
-
-
-'''
 from leakpro import LeakPro
 from examples.minv.celebA_attributes.celebA_tabular_plgmi_handler import CelebA_InputHandler
 config_path = "audit.yaml"
@@ -125,4 +109,3 @@ leakpro = LeakPro(CelebA_InputHandler, config_path)
 
 # Run the audit
 results = leakpro.run_audit(return_results=True)
-'''
