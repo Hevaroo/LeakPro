@@ -1,13 +1,10 @@
 import os
 import sys
 import yaml
-import pickle
 from pytorch_tabular import TabularModel
 from pytorch_tabular.models import CategoryEmbeddingModelConfig
 from pytorch_tabular.config import DataConfig, OptimizerConfig, TrainerConfig
 import pandas as pd
-import omegaconf
-import torch
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -18,8 +15,6 @@ data_folder = "./data"
 
 project_root = os.path.abspath(os.path.join(os.getcwd(), "../../.."))
 sys.path.append(project_root)
-
-from examples.minv.celebA_attributes.utils.celebA_tabular_data import get_celebA_train_testloader, get_celebA_publicloader
 
 # Load the config.yaml file
 with open('train_config.yaml', 'r') as file:
@@ -36,8 +31,6 @@ df_val = df.drop(df_train.index)
 # For all entries in df_val, if the identity is not in df_train, remove it
 df_val = df_val[df_val["identity"].isin(df_train["identity"])]
 df_val = df_val.reset_index(drop=True)
-
-
 
 train = False
 if train:
@@ -96,8 +89,6 @@ if train:
     print("validation preds: ", pred_df["identity_prediction"].value_counts())
     # Save the model
     tabular_model.save_model("./target")
-
-
 
 from leakpro import LeakPro
 from examples.minv.celebA_attributes.celebA_tabular_plgmi_handler import CelebA_InputHandler
