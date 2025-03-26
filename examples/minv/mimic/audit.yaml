@@ -39,7 +39,7 @@ audit:  # Configurations for auditing
   reconstruction:
     batch_size: 32 # Integer number for indicating batch size in reconstruction
     num_class_samples: 5 # Number of samples to generate for each class
-    num_audited_classes: 50 # Number of classes to audit
+    num_audited_classes: 1000 # Number of classes to audit
     metrics:
       accuracy:
 

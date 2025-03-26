@@ -38,7 +38,7 @@ df_val = df_val.reset_index(drop=True)
 
 
 
-train = True
+train = False
 if train:
     #train_loader, test_loader = get_celebA_train_testloader(train_config, random_state=123)
 
@@ -68,26 +68,26 @@ if train:
     )
 
     trainer_config = TrainerConfig(
-        auto_lr_find=True,
-        batch_size=train_config["train"]["batch_size"],
+        auto_lr_find=False,
+        batch_size=256,
         max_epochs=100,
         early_stopping='train_loss_0'
     )
 
     optimizer_config = OptimizerConfig()
 
-    # model_config = CategoryEmbeddingModelConfig(
-    #     task="classification",
-    #     layers="1024-512-512",
-    #     activation="ReLU",
-    #     learning_rate=1e-3
-    # )
-
-    model_config = GANDALFConfig(
-    task="classification",
-    gflu_stages=16,
-    learning_rate=1e-3,
+    model_config = CategoryEmbeddingModelConfig(
+        task="classification",
+        layers="2048-1024-512",
+        activation="ReLU",
+        learning_rate=1e-3
     )
+
+    # model_config = GANDALFConfig(
+    # task="classification",
+    # gflu_stages=16,
+    # learning_rate=1e-3,
+    # )
 
     tabular_model = TabularModel(
         data_config=data_config,
@@ -107,12 +107,12 @@ if train:
 
 
 from leakpro import LeakPro
-from examples.minv.celebA_attributes.celebA_tabular_plgmi_handler import CelebA_InputHandler
+from examples.minv.mimic.mimic_plgmi_handler import Mimic_InputHandler
 config_path = "audit.yaml"
 
 
 # Initialize the LeakPro object
-leakpro = LeakPro(CelebA_InputHandler, config_path)
+leakpro = LeakPro(Mimic_InputHandler, config_path)
 
 # Run the audit
 results = leakpro.run_audit(return_results=True)
