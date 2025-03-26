@@ -372,6 +372,9 @@ class AttackPLGMI(AbstractMINV):
             out1 = self.target_model(aug_list(fake))
             out2 = self.target_model(aug_list(fake))
             # compute the loss
+            print("Out1 shape:  ", out1.shape)
+            print("Y shape:  ", y.shape)
+            
             inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
 
             if z.grad is not None:
