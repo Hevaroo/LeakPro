@@ -82,13 +82,41 @@ omr_processed['diastolic'] = omr['diastolic'].mean()  # or use other aggregation
 omr_processed.reset_index(inplace=True)
 
 # Show the processed omr data
-print(omr_processed)
+#print(omr_processed)
 
 # Proceed with merging into the main dataframe
 df = df.merge(omr_processed, on="subject_id", how="left")
 
 # Fill missing values with median or another strategy
 #df.fillna(df.median(), inplace=True)
+
+# Only keep medications given BEFORE diagnosis time (optional)
+#df = df[df['event_time'] < df['admittime']]
+
+# Convert medications into binary features (one-hot encoding)
+#df = pd.get_dummies(df, columns=['medication'])
+
+# Aggregate medication features per patient
+#df = df.groupby('hadm_id').max().reset_index()
+
+emar = pd.read_csv(path + "hosp/emar.csv", usecols=['hadm_id', 'medication'])
+
+print(emar.head())
+
+top_10_meds = emar['medication'].value_counts().nlargest(100).index.tolist()
+
+# Step 2: Filter only rows with top 10 medications
+emar_filtered = emar[emar['medication'].isin(top_10_meds)]
+
+# Step 3: One-hot encode the selected medications
+emar_filtered['medication'] = emar_filtered['medication'].astype(str)  # Ensure it's a string
+emar_encoded = pd.get_dummies(emar_filtered, columns=['medication'], prefix='med')
+
+# Step 4: Aggregate by `hadm_id` to get one row per admission (max to indicate if med was given)
+emar_encoded = emar_encoded.groupby('hadm_id').max().reset_index()
+
+# Step 5: Merge with the main dataframe
+df = df.merge(emar_encoded, on='hadm_id', how='left')
 
 # ================================
 # DATA PREPROCESSING
@@ -102,7 +130,7 @@ df = df.merge(omr_processed, on="subject_id", how="left")
 df['icd_code'] = df['icd_code'].astype('category').cat.codes
 
 # Extract features and labels
-X = df.drop(columns=['hadm_id', 'subject_id', 'icd_code'])  # Features
+X = df.drop(columns=['hadm_id', 'icd_code'])  # Features
 y = df['icd_code']  # Labels
 
 print(X.head())
