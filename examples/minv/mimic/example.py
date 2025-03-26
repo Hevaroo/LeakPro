@@ -5,6 +5,7 @@ import pickle
 from pytorch_tabular import TabularModel
 from pytorch_tabular.models import CategoryEmbeddingModelConfig, TabNetModelConfig, GANDALFConfig
 from pytorch_tabular.config import DataConfig, OptimizerConfig, TrainerConfig
+from sklearn.model_selection import StratifiedShuffleSplit
 import pandas as pd
 import omegaconf
 import torch
@@ -28,26 +29,32 @@ with open('train_config.yaml', 'r') as file:
 path = os.path.join(os.getcwd(), train_config["data"]["data_dir"])
 data_dir =  train_config["data"]["data_dir"] + "/private_df.pkl"
 
-df = pd.read_pickle(data_dir)
-
-df_train = df.sample(frac=train_config["data"]["f_train"], random_state=123)
-df_val = df.drop(df_train.index)
-# For all entries in df_val, if the identity is not in df_train, remove it
-df_val = df_val[df_val["identity"].isin(df_train["identity"])]
-df_val = df_val.reset_index(drop=True)
-
-
-
 train = True
 if train:
     #train_loader, test_loader = get_celebA_train_testloader(train_config, random_state=123)
 
     df = pd.read_pickle(data_dir)
 
-    df_train = df.sample(frac=train_config["data"]["f_train"], random_state=123)
-    df_val = df.drop(df_train.index)
-    # For all entries in df_val, if the identity is not in df_train, remove it
-    df_val = df_val[df_val["identity"].isin(df_train["identity"])]
+    # Compute the counts of each label
+    label_counts = df["identity"].value_counts()
+
+    # Separate cases where the label occurs only once
+    df_one_instance = df[df["identity"].isin(label_counts[label_counts == 1].index)]
+
+    # Remove the cases where the label occurs only once
+    df_filtered = df[~df["identity"].isin(label_counts[label_counts == 1].index)]
+
+    # Set up a stratified shuffle split based on the label
+    splitter = StratifiedShuffleSplit(n_splits=1,test_size=1 - train_config["data"]["f_train"], random_state=42)
+
+    # Split the data
+    for train_idx, test_idx in splitter.split(df_filtered, df_filtered["identity"]):
+        df_train = df_filtered.iloc[train_idx]
+        df_val = df_filtered.iloc[test_idx]
+
+    # Add the cases where the label occurs only once to the training set
+    df_train = pd.concat([df_train, df_one_instance]).reset_index(drop=True)
+
     df_val = df_val.reset_index(drop=True)
 
     # Continous column names
@@ -69,25 +76,25 @@ if train:
 
     trainer_config = TrainerConfig(
         auto_lr_find=True,
-        batch_size=train_config["train"]["batch_size"],
-        max_epochs=100,
+        batch_size=256,
+        max_epochs=300,
         early_stopping='train_loss_0'
     )
 
     optimizer_config = OptimizerConfig()
 
-    # model_config = CategoryEmbeddingModelConfig(
-    #     task="classification",
-    #     layers="1024-512-512",
-    #     activation="ReLU",
-    #     learning_rate=1e-3
-    # )
-
-    model_config = GANDALFConfig(
-    task="classification",
-    gflu_stages=16,
-    learning_rate=1e-3,
+    model_config = CategoryEmbeddingModelConfig(
+        task="classification",
+        layers="2048-1024-512-256",
+        activation="ReLU",
+        learning_rate=1e-3
     )
+
+    # model_config = GANDALFConfig(
+    # task="classification",
+    # gflu_stages=16,
+    # learning_rate=1e-3,
+    # )
 
     tabular_model = TabularModel(
         data_config=data_config,
@@ -103,7 +110,6 @@ if train:
     print("validation preds: ", pred_df["identity_prediction"].value_counts())
     # Save the model
     tabular_model.save_model("./target")
-
 
 
 from leakpro import LeakPro

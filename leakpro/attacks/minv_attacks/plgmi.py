@@ -196,7 +196,6 @@ class AttackPLGMI(AbstractMINV):
                 pseudo_data = pd.DataFrame(pseudo_data)
         logger.info("Created pseudo dataloader")
 
-        print(pseudo_data)
         # pseudo_data is now a list of tuples (entry, pseudo_label)
         # We want to set the default device to the sampler in the returned dataloader
         # to be on device, does not apply when using CTGAN
@@ -258,9 +257,7 @@ class AttackPLGMI(AbstractMINV):
                                         alpha = self.alpha,
                                         log_interval = self.log_interval,
                                         sample_from_generator = self.gan_handler.sample_from_generator)
-            # Save generator
-            # self.gan_handler.save_generator(self.generator,
-            #                                 self.output_dir + "/trained_models/plgmi_generator.pth")  # noqa: ERA001
+
             self.gan_handler.trained_bool = True
         else:
             logger.info("GAN already trained, skipping training")
