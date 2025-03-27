@@ -5,6 +5,7 @@ import pickle
 from pytorch_tabular import TabularModel
 from pytorch_tabular.models import CategoryEmbeddingModelConfig, TabNetModelConfig, GANDALFConfig
 from pytorch_tabular.config import DataConfig, OptimizerConfig, TrainerConfig
+from sklearn.model_selection import StratifiedShuffleSplit
 import pandas as pd
 import omegaconf
 import torch
@@ -68,10 +69,26 @@ if train:
 
     df = pd.read_pickle(data_dir)
 
-    df_train = df.sample(frac=train_config["data"]["f_train"], random_state=123)
-    df_val = df.drop(df_train.index)
-    # For all entries in df_val, if the identity is not in df_train, remove it
-    df_val = df_val[df_val["identity"].isin(df_train["identity"])]
+    # Compute the counts of each label
+    label_counts = df["identity"].value_counts()
+
+    # Separate cases where the label occurs only once
+    df_one_instance = df[df["identity"].isin(label_counts[label_counts == 1].index)]
+
+    # Remove the cases where the label occurs only once
+    df_filtered = df[~df["identity"].isin(label_counts[label_counts == 1].index)]
+
+    # Set up a stratified shuffle split based on the label
+    splitter = StratifiedShuffleSplit(n_splits=1,test_size=1 - train_config["data"]["f_train"], random_state=42)
+
+    # Split the data
+    for train_idx, test_idx in splitter.split(df_filtered, df_filtered["identity"]):
+        df_train = df_filtered.iloc[train_idx]
+        df_val = df_filtered.iloc[test_idx]
+
+    # Add the cases where the label occurs only once to the training set
+    df_train = pd.concat([df_train, df_one_instance]).reset_index(drop=True)
+
     df_val = df_val.reset_index(drop=True)
 
     # Continous column names
@@ -127,7 +144,6 @@ if train:
     print("validation preds: ", pred_df["identity_prediction"].value_counts())
     # Save the model
     tabular_model.save_model("./target/mlp2")
-
 
 
 from leakpro import LeakPro

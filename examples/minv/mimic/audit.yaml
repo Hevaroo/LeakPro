@@ -27,7 +27,7 @@ audit:  # Configurations for auditing
         init_params:
           embedding_dim: *dim_z
           verbose: True
-          epochs: 100
+          epochs: 1
           #num_classes: *n_cls
           #bottom_width: 4
       discriminator:
