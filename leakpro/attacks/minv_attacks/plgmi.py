@@ -211,11 +211,14 @@ class AttackPLGMI(AbstractMINV):
         self.target_model = self.handler.target_model
         if self.data_format == "dataframe":
             self.gan_handler = GANHandler(self.handler, configs=self.configs, use_discriminator=False)
+            self.generator = self.gan_handler.get_generator()
+
             self.discriminator = None
             self.gen_optimizer = None
             self.dis_optimizer = None
         elif self.data_format == "dataloader":
             self.gan_handler = GANHandler(self.handler, configs=self.configs)
+            self.generator = self.gan_handler.get_generator()
 
             # Get the discriminator
             self.discriminator = self.gan_handler.get_discriminator()
@@ -232,7 +235,6 @@ class AttackPLGMI(AbstractMINV):
         self.public_dataloader = self.handler.get_public_dataloader(self.configs.batch_size)
 
         # Get generator
-        self.generator = self.gan_handler.get_generator()
 
 
         # Train the GAN
@@ -280,7 +282,9 @@ class AttackPLGMI(AbstractMINV):
         num_audited_classes = reconstruction_configs.num_audited_classes
 
         # Get random labels
-        labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
+        #labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
+        # Get range of labels from 0 to num_audited_classes
+        labels = torch.arange(num_audited_classes).to(self.device)
 
         random_z = torch.randn(num_audited_classes, self.generator.dim_z, device=self.device)
 
@@ -372,9 +376,7 @@ class AttackPLGMI(AbstractMINV):
             out1 = self.target_model(aug_list(fake))
             out2 = self.target_model(aug_list(fake))
             # compute the loss
-            print("Out1 shape:  ", out1.shape)
-            print("Y shape:  ", y.shape)
-            
+
             inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
 
             if z.grad is not None:

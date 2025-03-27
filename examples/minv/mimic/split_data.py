@@ -25,11 +25,23 @@ df.drop(columns=['hadm_id', 'subject_id'], inplace=True)
 # rename icd_code to identity
 df.rename(columns={"icd_code": "identity"}, inplace=True)
 
+from sklearn.preprocessing import OrdinalEncoder
+
+# Apply ordinal encoding
+encoder = OrdinalEncoder(dtype=int, encoded_missing_value=-1)
+df[['gender']] = encoder.fit_transform(df[['gender']])
+df[['insurance']] = encoder.fit_transform(df[['insurance']])
+df[['race']] = encoder.fit_transform(df[['race']])
+
+
 # Public data: Patients with first half of all unique icd_codes
 private_df = df[df['identity'] < df['identity'].nunique() // 2]
 
 # Private data: Patients with second half of all unique identitys
 public_df = df[df['identity'] >= df['identity'].nunique() // 2]
+
+private_df = private_df.groupby("identity").filter(lambda x: len(x) > 4)
+
 
 print(public_df.shape, private_df.shape)
 
@@ -42,6 +54,8 @@ print(public_df['identity'].unique().shape, private_df['identity'].unique().shap
 
 # print all columns 
 print(public_df.columns)
+
+
 
 public_df.to_pickle("data/public_df.pkl")
 private_df.to_pickle("data/private_df.pkl")

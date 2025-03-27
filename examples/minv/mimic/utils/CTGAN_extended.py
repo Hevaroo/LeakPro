@@ -22,7 +22,7 @@ class CustomCTGAN(CTGAN):
                  discriminator_decay=0.000001,
                  num_classes=5088,
                  batch_size=1000, 
-                 discriminator_steps=1, 
+                 discriminator_steps=5, 
                  log_frequency=True, 
                  verbose=False, 
                  epochs=300, 
