@@ -18,7 +18,7 @@ private_df = pd.read_pickle("data/private_df.pkl")
 print(private_df["identity"].value_counts())
 
 # remove rows where identity value count is 1
-private_df = private_df.groupby("identity").filter(lambda x: len(x) > 4)
+private_df = private_df.groupby("identity").filter(lambda x: len(x) > 49)
 
 # print counts of identity column
 print(private_df["identity"].value_counts())

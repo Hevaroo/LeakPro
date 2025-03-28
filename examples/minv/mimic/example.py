@@ -63,7 +63,7 @@ df_val = df_val.reset_index(drop=True)
 #print number of unique classes in df_train
 print("Number of unique classes in df_train: ", df_train["identity"].nunique())
 
-train = False
+train = True
 if train:
     #train_loader, test_loader = get_celebA_train_testloader(train_config, random_state=123)
 
@@ -119,7 +119,7 @@ if train:
 
     model_config = CategoryEmbeddingModelConfig(
         task="classification",
-        layers="2048-1024-512",
+        layers="2048-1024-512-256",
         activation="ReLU",
         learning_rate=1e-3,
     )

@@ -37,10 +37,20 @@ df[['race']] = encoder.fit_transform(df[['race']])
 # Public data: Patients with first half of all unique icd_codes
 private_df = df[df['identity'] < df['identity'].nunique() // 2]
 
-# Private data: Patients with second half of all unique identitys
-public_df = df[df['identity'] >= df['identity'].nunique() // 2]
 
-private_df = private_df.groupby("identity").filter(lambda x: len(x) > 4)
+private_df = private_df.groupby("identity").filter(lambda x: len(x) > 99)
+
+# add all examples in df not in private to public_df
+public_df = df.drop(private_df.index)
+
+
+# remap identity column in private_df to be from 0 to number of unique classes
+
+unique_ids = sorted(private_df['identity'].unique())
+mapping = {old: new for new, old in enumerate(unique_ids)}
+private_df['identity'] = private_df['identity'].map(mapping)
+
+
 
 
 print(public_df.shape, private_df.shape)
@@ -54,8 +64,6 @@ print(public_df['identity'].unique().shape, private_df['identity'].unique().shap
 
 # print all columns 
 print(public_df.columns)
-
-
 
 public_df.to_pickle("data/public_df.pkl")
 private_df.to_pickle("data/private_df.pkl")

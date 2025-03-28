@@ -11,7 +11,7 @@ from leakpro.schemas import MIAMetaDataSchema, OptimizerConfig, LossConfig
 class ResNet152(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-        self.model = resnet152(weights=ResNet152_Weights.IMAGENET1K_V1)
+        self.model = resnet152(weights=ResNet152_Weights.IMAGENET1K_V2)
         self.model.fc = nn.Linear(self.model.fc.in_features, num_classes)
         self.init_params = {"num_classes": num_classes}
 
@@ -47,7 +47,7 @@ def create_trained_model_and_metadata(model,
     model.train()
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     train_losses, train_accuracies = [], []
     test_losses, test_accuracies = [], []
 

@@ -130,7 +130,7 @@ class CustomCTGAN(CTGAN):
             samples = pd.concat([samples, sample])
         return samples
 
-    def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, alpha = 0.1, discrete_columns=(), use_inv_loss=True):
+    def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, n_iter, alpha = 0.1, discrete_columns=(), use_inv_loss=True):
         """
         Fit the CTGAN model to the training data using pseudo-labeled guidance as in the PLG-MI attack.
 
@@ -153,7 +153,7 @@ class CustomCTGAN(CTGAN):
                 List of column names that are discrete.
         """
 
-        epochs = self._epochs
+        epochs = n_iter
         self._validate_discrete_columns(train_data, discrete_columns)
         self._validate_null_data(train_data, discrete_columns)
         
