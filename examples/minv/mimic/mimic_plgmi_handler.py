@@ -6,9 +6,7 @@ from tqdm import tqdm
 from leakpro import AbstractInputHandler
 from leakpro.attacks.utils import gan_losses
 from leakpro.schemas import TrainingOutput
-from examples.minv.celebA_attributes.utils.CTGAN_extended import CustomCTGAN
 import pickle
-
 import pandas as pd
 
 class Mimic_InputHandler(AbstractInputHandler):
@@ -147,7 +145,7 @@ class Mimic_InputHandler(AbstractInputHandler):
         # ctgan takes dataframe or numpy array as input
         ctgan.fit(train_data= pseudo_loader.dataset, 
                     target_model=target_model,
-                    num_classes=7011,
+                    num_classes=705,
                     inv_criterion=inv_criterion,
                     gen_criterion=gen_criterion,
                     dis_criterion=dis_criterion,
@@ -155,8 +153,7 @@ class Mimic_InputHandler(AbstractInputHandler):
                     discrete_columns=discrete_columns,
                     use_inv_loss=True)
         
-        
-        ctgan.save("ctgan.pth")
+        ctgan.save("ctgan.pkl")
         
 
         

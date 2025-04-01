@@ -6,3 +6,4 @@ target/*
 lightning_logs/*
 saved_models/*
 .pt_tmp/*
+*.pkl

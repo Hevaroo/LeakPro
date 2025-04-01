@@ -130,6 +130,7 @@ class AttackPLGMI(AbstractMINV):
         logger.info("Performing top-n selection for pseudo labels")
         self.target_model.eval()
         all_confidences = []
+        self.target_model.to(self.device)
 
         # TODO: Maybe this is handler/modality functions
         if self.data_format == "dataloader":
@@ -206,6 +207,7 @@ class AttackPLGMI(AbstractMINV):
         """Prepare the attack."""
         logger.info("Preparing attack")
 
+        # loss_d = F.relu(1. - y_real).mean() + F.relu(1. + y_fake).mean()
         # Get the target model from the handler
         self.target_model = self.handler.target_model
         if self.data_format == "dataframe":
@@ -271,7 +273,6 @@ class AttackPLGMI(AbstractMINV):
         # Define image metrics class
 
         self.evaluation_model = self.target_model # TODO: Change to evaluation model
-
         reconstruction_configs = self.handler.configs.audit.reconstruction
 
         num_audited_classes = reconstruction_configs.num_audited_classes
@@ -296,8 +297,14 @@ class AttackPLGMI(AbstractMINV):
             # TODO: Implement a class with a .save function.
 
         elif self.data_format == "dataframe":
-            # generate samples from the generator
+            # Accuracy of the target model on the random labels
+            initial_metrics = TabularMetrics(self.handler, self.gan_handler,
+                                        reconstruction_configs,
+                                        labels=labels,
+                                        z=random_z)
+            logger.info("INITIAL ACCURACY:", initial_metrics.results)
 
+            # generate samples from the generator
             if self.handler.configs.target.model_type == "xgboost":
                 opt_z = self.optimize_z_no_grad(y=labels,
                                 iter_times=self.configs.z_optimization_iter).to(self.device)
@@ -369,9 +376,6 @@ class AttackPLGMI(AbstractMINV):
             out1 = self.target_model(aug_list(fake))
             out2 = self.target_model(aug_list(fake))
             # compute the loss
-            print("Out1 shape:  ", out1.shape)
-            print("Y shape:  ", y.shape)
-            
             inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
 
             if z.grad is not None:
