@@ -154,7 +154,8 @@ class Mimic_InputHandler(AbstractInputHandler):
                     alpha=alpha,
                     discrete_columns=discrete_columns,
                     use_inv_loss=True,
-                    n_iter=n_iter,)
+                    n_iter=n_iter,
+                    n_dis=n_dis)
         
         
         ctgan.save("ctgan.pth")

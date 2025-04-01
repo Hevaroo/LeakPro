@@ -7,7 +7,7 @@ project_root = os.path.abspath(os.path.join(os.getcwd(), "../../.."))
 sys.path.append(project_root)
 
 
-train = True
+train = False
 if train:
     from examples.minv.celebA.utils.celebA_data import get_celebA_train_test_loader
 

@@ -129,14 +129,14 @@ class AttackPLGMI(AbstractMINV):
         # TODO: This does not scale well. Consider creating a class for the dataloader and implementing the __getitem__ method.
         logger.info("Performing top-n selection for pseudo labels")
         self.target_model.eval()
+        self.target_model.to(self.device)
         all_confidences = []
 
         # TODO: Maybe this is handler/modality functions
         if self.data_format == "dataloader":
-
             for entry, _ in self.public_dataloader:
                 with torch.no_grad():
-                    outputs = self.target_model(entry)
+                    outputs = self.target_model(entry.to(self.device))
                     confidences = F.softmax(outputs, dim=1)
                     all_confidences.append(confidences)
             # Concatenate all confidences
@@ -176,6 +176,7 @@ class AttackPLGMI(AbstractMINV):
 
         # Create pseudo dataloader from top-n pseudo_map
         pseudo_data = []
+
 
         if self.data_format == "dataloader":
             for i in range(self.num_classes):
@@ -245,20 +246,21 @@ class AttackPLGMI(AbstractMINV):
             logger.info("Training the GAN")
             # TODO: Change this input structure to just pass the attack class
             self.handler.train_gan(pseudo_loader = self.pseudo_loader,
-                                        gen = self.generator,
-                                        dis = self.discriminator,
-                                        gen_criterion = gan_losses.GenLoss(loss_type="hinge", is_relativistic=False),
-                                        dis_criterion = gan_losses.DisLoss(loss_type="hinge", is_relativistic=False),
-                                        inv_criterion = gan_losses.max_margin_loss,
-                                        target_model = self.target_model,
-                                        opt_gen = self.gen_optimizer,
-                                        opt_dis = self.dis_optimizer,
-                                        n_iter = self.n_iter,
-                                        n_dis  = self.n_dis,
-                                        device = self.device,
-                                        alpha = self.alpha,
-                                        log_interval = self.log_interval,
-                                        sample_from_generator = self.gan_handler.sample_from_generator)
+                                    gen = self.generator,
+                                    dis = self.discriminator,
+                                    gen_criterion = gan_losses.GenLoss(loss_type="hinge", is_relativistic=False),
+                                    dis_criterion = gan_losses.DisLoss(loss_type="hinge", is_relativistic=False),
+                                    inv_criterion = gan_losses.max_margin_loss,
+                                    target_model = self.target_model,
+                                    opt_gen = self.gen_optimizer,
+                                    opt_dis = self.dis_optimizer,
+                                    n_iter = self.n_iter,
+                                    n_dis  = self.n_dis,
+                                    device = self.device,
+                                    alpha = self.alpha,
+                                    log_interval = self.log_interval,
+                                    sample_from_generator = lambda: \
+                                        self.gan_handler.sample_from_generator(batch_size=self.batch_size))
 
             self.gan_handler.trained_bool = True
         else:

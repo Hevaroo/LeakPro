@@ -63,7 +63,7 @@ df_val = df_val.reset_index(drop=True)
 #print number of unique classes in df_train
 print("Number of unique classes in df_train: ", df_train["identity"].nunique())
 
-train = True
+train = False
 if train:
     #train_loader, test_loader = get_celebA_train_testloader(train_config, random_state=123)
 
@@ -117,18 +117,20 @@ if train:
 
     optimizer_config = OptimizerConfig()
 
-    model_config = CategoryEmbeddingModelConfig(
-        task="classification",
-        layers="2048-1024-512-256",
-        activation="ReLU",
-        learning_rate=1e-3,
-    )
-
-    # model_config = GANDALFConfig(
-    # task="classification",
-    # gflu_stages=16,
-    # learning_rate=1e-3,
+    # model_config = CategoryEmbeddingModelConfig(
+    #     task="classification",
+    #     layers="2048-1024-512-256",
+    #     activation="ReLU",
+    #     learning_rate=1e-3,
     # )
+
+    model_config = GANDALFConfig(
+    task="classification",
+    gflu_stages=16,
+    gflu_dropout=0.1,
+    embedding_dropout=0.1,
+    learning_rate=1e-3,
+    )
 
     tabular_model = TabularModel(
         data_config=data_config,
@@ -143,7 +145,7 @@ if train:
 
     print("validation preds: ", pred_df["identity_prediction"].value_counts())
     # Save the model
-    tabular_model.save_model("./target/mlp2")
+    tabular_model.save_model("./target/gandalf")
 
 
 from leakpro import LeakPro

@@ -130,7 +130,7 @@ class CustomCTGAN(CTGAN):
             samples = pd.concat([samples, sample])
         return samples
 
-    def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, n_iter, alpha = 0.1, discrete_columns=(), use_inv_loss=True):
+    def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, n_iter, n_dis, alpha = 0.1, discrete_columns=(), use_inv_loss=True):
         """
         Fit the CTGAN model to the training data using pseudo-labeled guidance as in the PLG-MI attack.
 
@@ -231,7 +231,7 @@ class CustomCTGAN(CTGAN):
         steps_per_epoch = max(len(train_data) // self._batch_size, 1)
         for i in epoch_iterator:
             for id_ in range(steps_per_epoch):
-                for n in range(self._discriminator_steps):
+                for n in range(n_dis):
                     
                     # TODO: Only condition on pseudo-labels
                     
