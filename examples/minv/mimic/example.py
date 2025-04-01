@@ -83,27 +83,28 @@ if train:
 
     trainer_config = TrainerConfig(
         auto_lr_find=False,
-        batch_size=1000,
-        max_epochs=30,
-        early_stopping='train_loss_0'
+        batch_size=256,
+        min_epochs=400,
+        max_epochs=450,
+        early_stopping='train_loss_0',
     )
 
     optimizer_config = OptimizerConfig()
 
-    # model_config = CategoryEmbeddingModelConfig(
-    #     task="classification",
-    #     layers="2048-1024-512-256",
-    #     activation="ReLU",
-    #     learning_rate=1e-3,
-    # )
-
-    model_config = GANDALFConfig(
-    task="classification",
-    gflu_stages=16,
-    gflu_dropout=0.1,
-    embedding_dropout=0.1,
-    learning_rate=1e-3,
+    model_config = CategoryEmbeddingModelConfig(
+        task="classification",
+        layers="2048-1024-1024-1024-512-512-256",
+        activation="ReLU",
+        learning_rate=1e-3,
     )
+
+    # model_config = GANDALFConfig(
+    # task="classification",
+    # gflu_stages=16,
+    # gflu_dropout=0.1,
+    # embedding_dropout=0.1,
+    # learning_rate=1e-3,
+    # )
 
     tabular_model = TabularModel(
         data_config=data_config,
@@ -114,11 +115,12 @@ if train:
 
     tabular_model.fit(train=df_train, validation=df_val)
     results = tabular_model.evaluate(df_val)
+    results_2 = tabular_model.evaluate(df_train)
+    print("train results: ", results_2)
     pred_df = tabular_model.predict(df_val.drop(columns=["identity"]))
-
     print("validation preds: ", pred_df["identity_prediction"].value_counts())
     # Save the model
-    tabular_model.save_model("./target/gandalf")
+    tabular_model.save_model("./target/")
 
 
 from leakpro import LeakPro
