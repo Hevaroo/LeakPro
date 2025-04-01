@@ -142,14 +142,13 @@ class AttackPLGMI(AbstractMINV):
             # Concatenate all confidences
 
         elif self.data_format == "dataframe":
-            # remove "identity" column from dataset
+            # Remove "identity" column from dataset
             public_data = self.public_dataloader.dataset.drop(columns=["identity"])
 
-            # If cuda is available and public_data is pandas, make public data cudf
-            outputs = self.target_model(public_data)
-            confidences = F.softmax(outputs, dim=1)
-            all_confidences.append(confidences)
-
+            with torch.no_grad():
+                outputs = self.target_model(public_data)
+                confidences = F.softmax(outputs, dim=1)
+                all_confidences.append(confidences)
 
         else:
             raise ValueError("Data format not supported")

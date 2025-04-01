@@ -17,10 +17,13 @@ class TabularWrapper(TabularModel):
         inference_dataloader = self.datamodule.prepare_inference_dataloader(entry)
 
         all_logits = []  # List to collect logits
-
+        
         # No 'torch.no_grad()' here because we want to keep the computation graph for backprop
         for batch in inference_dataloader:
             # Send batch to device            
+            batch = {key: value.to(self.device) for key, value in batch.items()}
+
+            
             # Perform forward pass to get model output
             out = self.model.forward(batch)
 

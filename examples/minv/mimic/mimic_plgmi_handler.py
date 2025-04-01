@@ -147,7 +147,7 @@ class Mimic_InputHandler(AbstractInputHandler):
         # ctgan takes dataframe or numpy array as input
         ctgan.fit(train_data= pseudo_loader.dataset, 
                     target_model=target_model,
-                    num_classes=7011,
+                    num_classes=705,
                     inv_criterion=inv_criterion,
                     gen_criterion=gen_criterion,
                     dis_criterion=dis_criterion,

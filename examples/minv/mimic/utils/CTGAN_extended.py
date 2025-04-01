@@ -21,7 +21,7 @@ class CustomCTGAN(CTGAN):
                  discriminator_lr=0.0002, 
                  discriminator_decay=0.000001,
                  num_classes=5088,
-                 batch_size=1000, 
+                 batch_size=100, 
                  discriminator_steps=5, 
                  log_frequency=True, 
                  verbose=False, 
@@ -162,6 +162,8 @@ class CustomCTGAN(CTGAN):
         self._transformer.fit(train_data, discrete_columns)
 
         train_data = self._transformer.transform(train_data)
+        
+        self.num_classes = num_classes
 
         self._data_sampler = DataSampler(
             train_data, self._transformer.output_info_list, self._log_frequency
@@ -198,25 +200,27 @@ class CustomCTGAN(CTGAN):
 
         def sample_pseudo_c1(batch_size):
             """
-            sample conditional vector c1 from the pseudo-labels
+            Sample conditional vector c1 with randomized condition values for each sample in the batch.
             """
-                
             condition_column = "pseudo_label"
-            condition_value = np.random.randint(0, num_classes)
-
+            
+            # Generate random condition values for each sample in the batch
+            condition_values = np.random.randint(0, self.num_classes, size=batch_size)
+            
             try:
                 warnings.filterwarnings('ignore') 
 
-                condition_info = self._transformer.convert_column_name_value_to_id(
-                    condition_column, condition_value
-                )
-                
-                global_condition_vec = self._data_sampler.generate_cond_from_condition_column_info(
-                    condition_info, batch_size
-                )
-
+                # Generate condition vectors for all condition values in the batch
+                condition_info_list = [
+                    self._transformer.convert_column_name_value_to_id(condition_column, value)
+                    for value in condition_values
+                ]
+                global_condition_vec = np.vstack([
+                    self._data_sampler.generate_cond_from_condition_column_info(info, 1)
+                    for info in condition_info_list
+                ])
             except ValueError:
-                # If the transformer has not seen the condition value in training, it will raise a ValueError
+                # If the transformer has not seen some condition values in training, it will raise a ValueError
                 # We still want to be able to sample, so we set the global_condition_vec to None
                 global_condition_vec = None
 
