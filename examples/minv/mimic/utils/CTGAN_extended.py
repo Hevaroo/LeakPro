@@ -361,8 +361,3 @@ class CustomCTGAN(CTGAN):
                     description.format(gen=generator_loss, dis=discriminator_loss, inv=inversion_loss)
                 )
                 
-    def save(self, path):
-        """Save the model to the specified path."""
-        torch.save(self._generator.state_dict(), path)
-        #self._transformer.save('transformer_' + path)
-        #self.loss_values.to_csv(path + '/loss_values.csv', index=False)
