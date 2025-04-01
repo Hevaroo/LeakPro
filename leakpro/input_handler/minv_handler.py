@@ -121,7 +121,6 @@ class MINVHandler:
             raise FileNotFoundError(f"Could not find the trained target model at {model_path}") from e
 
 
-
     def get_public_dataloader(self:Self, batch_size: int) -> DataLoader:
         """Return the public dataset dataloader."""
         return DataLoader(self.public_dataset, batch_size = batch_size, shuffle=False)
