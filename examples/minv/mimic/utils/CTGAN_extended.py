@@ -10,6 +10,7 @@ import numpy as np
 import warnings
 from tqdm import tqdm
 from torch import cuda, device
+from sdv.evaluation.single_table import evaluate_quality
 
 class CustomCTGAN(CTGAN):
     def __init__(self, 
@@ -21,8 +22,8 @@ class CustomCTGAN(CTGAN):
                  discriminator_lr=0.0002, 
                  discriminator_decay=0.000001,
                  num_classes=5088,
-                 batch_size=100, 
-                 discriminator_steps=5, 
+                 batch_size=1000, 
+                 discriminator_steps=5,
                  log_frequency=True, 
                  verbose=False, 
                  epochs=300, 
@@ -282,6 +283,7 @@ class CustomCTGAN(CTGAN):
                         real_cat, fake_cat, self._device, self.pac
                     )
                     # TODO: Maybe change this loss
+                    #loss_d = F.relu(1. - y_real).mean() + F.relu(1. + y_fake).mean()
                     loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
 
                     optimizerD.zero_grad(set_to_none=False)
@@ -360,4 +362,7 @@ class CustomCTGAN(CTGAN):
                 epoch_iterator.set_description(
                     description.format(gen=generator_loss, dis=discriminator_loss, inv=inversion_loss)
                 )
+
+
+            
                 

@@ -5,7 +5,6 @@ import pickle
 from pytorch_tabular import TabularModel
 from pytorch_tabular.models import CategoryEmbeddingModelConfig, TabNetModelConfig, GANDALFConfig
 from pytorch_tabular.config import DataConfig, OptimizerConfig, TrainerConfig
-from sklearn.model_selection import StratifiedShuffleSplit
 import pandas as pd
 import omegaconf
 import torch
@@ -65,32 +64,6 @@ print("Number of unique classes in df_train: ", df_train["identity"].nunique())
 
 train = False
 if train:
-    #train_loader, test_loader = get_celebA_train_testloader(train_config, random_state=123)
-
-    df = pd.read_pickle(data_dir)
-
-    # Compute the counts of each label
-    label_counts = df["identity"].value_counts()
-
-    # Separate cases where the label occurs only once
-    df_one_instance = df[df["identity"].isin(label_counts[label_counts == 1].index)]
-
-    # Remove the cases where the label occurs only once
-    df_filtered = df[~df["identity"].isin(label_counts[label_counts == 1].index)]
-
-    # Set up a stratified shuffle split based on the label
-    splitter = StratifiedShuffleSplit(n_splits=1,test_size=1 - train_config["data"]["f_train"], random_state=42)
-
-    # Split the data
-    for train_idx, test_idx in splitter.split(df_filtered, df_filtered["identity"]):
-        df_train = df_filtered.iloc[train_idx]
-        df_val = df_filtered.iloc[test_idx]
-
-    # Add the cases where the label occurs only once to the training set
-    df_train = pd.concat([df_train, df_one_instance]).reset_index(drop=True)
-
-    df_val = df_val.reset_index(drop=True)
-
     # Continous column names
     continuous_col_names = ['length_of_stay', 'num_procedures', 'num_medications', 'BMI',
        'BMI (kg/m2)', 'Height', 'Height (Inches)', 'Weight', 'Weight (Lbs)',
