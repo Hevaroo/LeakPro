@@ -129,28 +129,27 @@ class AttackPLGMI(AbstractMINV):
         # TODO: This does not scale well. Consider creating a class for the dataloader and implementing the __getitem__ method.
         logger.info("Performing top-n selection for pseudo labels")
         self.target_model.eval()
+        self.target_model.to(self.device)
         all_confidences = []
         self.target_model.to(self.device)
 
         # TODO: Maybe this is handler/modality functions
         if self.data_format == "dataloader":
-
             for entry, _ in self.public_dataloader:
                 with torch.no_grad():
-                    outputs = self.target_model(entry)
+                    outputs = self.target_model(entry.to(self.device))
                     confidences = F.softmax(outputs, dim=1)
                     all_confidences.append(confidences)
             # Concatenate all confidences
 
         elif self.data_format == "dataframe":
-            # remove "identity" column from dataset
+            # Remove "identity" column from dataset
             public_data = self.public_dataloader.dataset.drop(columns=["identity"])
 
-            # If cuda is available and public_data is pandas, make public data cudf
-            outputs = self.target_model(public_data)
-            confidences = F.softmax(outputs, dim=1)
-            all_confidences.append(confidences)
-
+            with torch.no_grad():
+                outputs = self.target_model(public_data)
+                confidences = F.softmax(outputs, dim=1)
+                all_confidences.append(confidences)
 
         else:
             raise ValueError("Data format not supported")
@@ -177,6 +176,7 @@ class AttackPLGMI(AbstractMINV):
 
         # Create pseudo dataloader from top-n pseudo_map
         pseudo_data = []
+
 
         if self.data_format == "dataloader":
             for i in range(self.num_classes):
@@ -212,11 +212,14 @@ class AttackPLGMI(AbstractMINV):
         self.target_model = self.handler.target_model
         if self.data_format == "dataframe":
             self.gan_handler = GANHandler(self.handler, configs=self.configs, use_discriminator=False)
+            self.generator = self.gan_handler.get_generator()
+
             self.discriminator = None
             self.gen_optimizer = None
             self.dis_optimizer = None
         elif self.data_format == "dataloader":
             self.gan_handler = GANHandler(self.handler, configs=self.configs)
+            self.generator = self.gan_handler.get_generator()
 
             # Get the discriminator
             self.discriminator = self.gan_handler.get_discriminator()
@@ -233,7 +236,6 @@ class AttackPLGMI(AbstractMINV):
         self.public_dataloader = self.handler.get_public_dataloader(self.configs.batch_size)
 
         # Get generator
-        self.generator = self.gan_handler.get_generator()
 
 
         # Train the GAN
@@ -245,20 +247,21 @@ class AttackPLGMI(AbstractMINV):
             logger.info("Training the GAN")
             # TODO: Change this input structure to just pass the attack class
             self.handler.train_gan(pseudo_loader = self.pseudo_loader,
-                                        gen = self.generator,
-                                        dis = self.discriminator,
-                                        gen_criterion = gan_losses.GenLoss(loss_type="hinge", is_relativistic=False),
-                                        dis_criterion = gan_losses.DisLoss(loss_type="hinge", is_relativistic=False),
-                                        inv_criterion = gan_losses.max_margin_loss,
-                                        target_model = self.target_model,
-                                        opt_gen = self.gen_optimizer,
-                                        opt_dis = self.dis_optimizer,
-                                        n_iter = self.n_iter,
-                                        n_dis  = self.n_dis,
-                                        device = self.device,
-                                        alpha = self.alpha,
-                                        log_interval = self.log_interval,
-                                        sample_from_generator = self.gan_handler.sample_from_generator)
+                                    gen = self.generator,
+                                    dis = self.discriminator,
+                                    gen_criterion = gan_losses.GenLoss(loss_type="hinge", is_relativistic=False),
+                                    dis_criterion = gan_losses.DisLoss(loss_type="hinge", is_relativistic=False),
+                                    inv_criterion = gan_losses.max_margin_loss,
+                                    target_model = self.target_model,
+                                    opt_gen = self.gen_optimizer,
+                                    opt_dis = self.dis_optimizer,
+                                    n_iter = self.n_iter,
+                                    n_dis  = self.n_dis,
+                                    device = self.device,
+                                    alpha = self.alpha,
+                                    log_interval = self.log_interval,
+                                    sample_from_generator = lambda: \
+                                        self.gan_handler.sample_from_generator(batch_size=self.batch_size))
 
             self.gan_handler.trained_bool = True
         else:
@@ -278,7 +281,9 @@ class AttackPLGMI(AbstractMINV):
         num_audited_classes = reconstruction_configs.num_audited_classes
 
         # Get random labels
-        labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
+        #labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
+        # Get range of labels from 0 to num_audited_classes
+        labels = torch.arange(num_audited_classes).to(self.device)
 
         random_z = torch.randn(num_audited_classes, self.generator.dim_z, device=self.device)
 
@@ -376,6 +381,7 @@ class AttackPLGMI(AbstractMINV):
             out1 = self.target_model(aug_list(fake))
             out2 = self.target_model(aug_list(fake))
             # compute the loss
+
             inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
 
             if z.grad is not None:

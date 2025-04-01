@@ -21,8 +21,8 @@ class CustomCTGAN(CTGAN):
                  discriminator_lr=0.0002, 
                  discriminator_decay=0.000001,
                  num_classes=5088,
-                 batch_size=1000, 
-                 discriminator_steps=1, 
+                 batch_size=100, 
+                 discriminator_steps=5, 
                  log_frequency=True, 
                  verbose=False, 
                  epochs=300, 
@@ -130,7 +130,7 @@ class CustomCTGAN(CTGAN):
             samples = pd.concat([samples, sample])
         return samples
 
-    def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, alpha = 0.1, discrete_columns=(), use_inv_loss=True):
+    def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, n_iter, n_dis, alpha = 0.1, discrete_columns=(), use_inv_loss=True):
         """
         Fit the CTGAN model to the training data using pseudo-labeled guidance as in the PLG-MI attack.
 
@@ -153,7 +153,7 @@ class CustomCTGAN(CTGAN):
                 List of column names that are discrete.
         """
 
-        epochs = self._epochs
+        epochs = n_iter
         self._validate_discrete_columns(train_data, discrete_columns)
         self._validate_null_data(train_data, discrete_columns)
         
@@ -162,6 +162,8 @@ class CustomCTGAN(CTGAN):
         self._transformer.fit(train_data, discrete_columns)
 
         train_data = self._transformer.transform(train_data)
+        
+        self.num_classes = num_classes
 
         self._data_sampler = DataSampler(
             train_data, self._transformer.output_info_list, self._log_frequency
@@ -198,25 +200,27 @@ class CustomCTGAN(CTGAN):
 
         def sample_pseudo_c1(batch_size):
             """
-            sample conditional vector c1 from the pseudo-labels
+            Sample conditional vector c1 with randomized condition values for each sample in the batch.
             """
-                
             condition_column = "pseudo_label"
-            condition_value = np.random.randint(0, num_classes)
-
+            
+            # Generate random condition values for each sample in the batch
+            condition_values = np.random.randint(0, self.num_classes, size=batch_size)
+            
             try:
                 warnings.filterwarnings('ignore') 
 
-                condition_info = self._transformer.convert_column_name_value_to_id(
-                    condition_column, condition_value
-                )
-                
-                global_condition_vec = self._data_sampler.generate_cond_from_condition_column_info(
-                    condition_info, batch_size
-                )
-
+                # Generate condition vectors for all condition values in the batch
+                condition_info_list = [
+                    self._transformer.convert_column_name_value_to_id(condition_column, value)
+                    for value in condition_values
+                ]
+                global_condition_vec = np.vstack([
+                    self._data_sampler.generate_cond_from_condition_column_info(info, 1)
+                    for info in condition_info_list
+                ])
             except ValueError:
-                # If the transformer has not seen the condition value in training, it will raise a ValueError
+                # If the transformer has not seen some condition values in training, it will raise a ValueError
                 # We still want to be able to sample, so we set the global_condition_vec to None
                 global_condition_vec = None
 
@@ -231,7 +235,7 @@ class CustomCTGAN(CTGAN):
         steps_per_epoch = max(len(train_data) // self._batch_size, 1)
         for i in epoch_iterator:
             for id_ in range(steps_per_epoch):
-                for n in range(self._discriminator_steps):
+                for n in range(n_dis):
                     
                     # TODO: Only condition on pseudo-labels
                     

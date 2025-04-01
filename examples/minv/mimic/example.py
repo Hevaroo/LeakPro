@@ -110,8 +110,8 @@ if train:
 
     trainer_config = TrainerConfig(
         auto_lr_find=False,
-        batch_size=256,
-        max_epochs=100,
+        batch_size=1000,
+        max_epochs=30,
         early_stopping='train_loss_0'
     )
 
@@ -119,7 +119,7 @@ if train:
 
     # model_config = CategoryEmbeddingModelConfig(
     #     task="classification",
-    #     layers="2048-1024-512",
+    #     layers="2048-1024-512-256",
     #     activation="ReLU",
     #     learning_rate=1e-3,
     # )
@@ -127,14 +127,10 @@ if train:
     model_config = GANDALFConfig(
     task="classification",
     gflu_stages=16,
+    gflu_dropout=0.1,
+    embedding_dropout=0.1,
     learning_rate=1e-3,
     )
-
-    # model_config = GANDALFConfig(
-    # task="classification",
-    # gflu_stages=16,
-    # learning_rate=1e-3,
-    # )
 
     tabular_model = TabularModel(
         data_config=data_config,
@@ -149,7 +145,7 @@ if train:
 
     print("validation preds: ", pred_df["identity_prediction"].value_counts())
     # Save the model
-    tabular_model.save_model("./target")
+    tabular_model.save_model("./target/gandalf")
 
 
 from leakpro import LeakPro
