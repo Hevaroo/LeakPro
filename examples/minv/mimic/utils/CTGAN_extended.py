@@ -198,14 +198,14 @@ class CustomCTGAN(CTGAN):
         self.loss_values = pd.DataFrame(columns=['Epoch', 'Generator Loss', 'Distriminator Loss', 'Inversion Loss'])
         
 
-        def sample_pseudo_c1(batch_size):
+        def sample_pseudo_c1(condition_values):
             """
             Sample conditional vector c1 with randomized condition values for each sample in the batch.
             """
             condition_column = "pseudo_label"
             
             # Generate random condition values for each sample in the batch
-            condition_values = np.random.randint(0, self.num_classes, size=batch_size)
+           
             
             try:
                 warnings.filterwarnings('ignore') 
@@ -250,7 +250,8 @@ class CustomCTGAN(CTGAN):
                         c2 = c1[perm]
                     """
                     # Sample conditional vector c1 from the pseudo-labels
-                    c1 = sample_pseudo_c1(self._batch_size)
+                    condition_values = np.random.randint(0, self.num_classes, size=self._batch_size)
+                    c1 = sample_pseudo_c1(condition_values)
                     
                     if c1 is None:                   
                         c1 = self._data_sampler.sample_original_condvec(self._batch_size)
@@ -292,7 +293,8 @@ class CustomCTGAN(CTGAN):
                 fakez = torch.normal(mean=mean, std=std)
                 condvec = self._data_sampler.sample_condvec(self._batch_size)
                 
-                c1 = sample_pseudo_c1(self._batch_size)
+                condition_values = np.random.randint(0, self.num_classes, size=self._batch_size)
+                c1 = sample_pseudo_c1(condition_values)
                 
                 if c1 is None:                   
                     c1 = self._data_sampler.sample_original_condvec(self._batch_size)
@@ -311,7 +313,7 @@ class CustomCTGAN(CTGAN):
                     y_fake = discriminator(fakeact)
 
                 # Pseudo label batch is last column of fakeact
-                pseudo_label_batch = fakeact[:, -1].long()
+                pseudo_label_batch = torch.from_numpy(condition_values).to(self._device)
 
                 # Fake feature vector
                 fakefeat = fakeact
