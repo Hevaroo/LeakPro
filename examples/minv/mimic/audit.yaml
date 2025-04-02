@@ -4,8 +4,8 @@ audit:  # Configurations for auditing
   data_modality: "image" #image, tabular
   attack_list:
     plgmi:
-      n_dis: 10 # Integer number for indicating the number of discriminator updates per generator update
-      n_iter: 200 # Integer number for indicating the iterations for training the GAN
+      n_dis: 1 # Integer number for indicating the number of discriminator updates per generator update
+      n_iter: 50 # Integer number for indicating the iterations for training the GAN
       batch_size: 100 # Integer number for indicating batch size for training the GAN
       gen_lr: 0.1 # Float number for indicating learning rate for training the generator
       dis_lr: 0.1 # Float number for indicating learning rate for training the discriminator

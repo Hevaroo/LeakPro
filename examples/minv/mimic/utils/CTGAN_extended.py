@@ -22,7 +22,7 @@ class CustomCTGAN(CTGAN):
                  discriminator_lr=0.001, 
                  discriminator_decay=0.000001,
                  num_classes=5088,
-                 batch_size=100, 
+                 batch_size=2000, 
                  discriminator_steps=5,
                  log_frequency=True, 
                  verbose=False, 
@@ -158,6 +158,10 @@ class CustomCTGAN(CTGAN):
         self._validate_discrete_columns(train_data, discrete_columns)
         self._validate_null_data(train_data, discrete_columns)
 
+        # Set first column in discrete_columns to be the condition column
+        print(discrete_columns)
+
+
         # Convert "pseudo_label" column to categorical
         train_data["pseudo_label"] = train_data["pseudo_label"].astype("category")
 
@@ -201,6 +205,22 @@ class CustomCTGAN(CTGAN):
 
         self.loss_values = pd.DataFrame(columns=['Epoch', 'Generator Loss', 'Distriminator Loss', 'Inversion Loss'])
         
+        
+        num_unused_discrete_categories = 0
+        for col in discrete_columns:
+            if col != "pseudo_label":
+        
+                # Get categories in col
+                categories = original_train_data[col].unique()
+                num_unused_discrete_categories += len(categories)
+                for value in categories:
+                    info = self._transformer.convert_column_name_value_to_id(col, value)
+                    print( f"Column: {col}, Value: {value}, Info: {info}")
+
+                    c1 = self._data_sampler.generate_cond_from_condition_column_info(info, 1)
+                    # find index of the fist 1 in the condition vector
+                    index = np.where(c1[0] == 1)[0][0]
+                    print(f"Index: {index}")
 
         def sample_pseudo_c1(condition_values):
             """
@@ -255,11 +275,15 @@ class CustomCTGAN(CTGAN):
                         c2 = c1[perm]
                     """
 
-                    # Sample condition values for the batch from original train_data
+
+
                     condition_values = original_train_data["pseudo_label"].sample(self._batch_size).values
                     # Sample conditional vector c1 from the condition values (pseudo-labels)
                     c1 = sample_pseudo_c1(condition_values)
-                    
+                    print(condition_values)
+                    print(c1.shape)
+                    print(c1)
+
                     if c1 is None:
                         c1 = self._data_sampler.sample_original_condvec(self._batch_size)   
                         print("SAMPLING FROM ORIGINAL COND VEC")         
@@ -270,7 +294,12 @@ class CustomCTGAN(CTGAN):
                     
                     # Sample real data
                     real = self._data_sampler.sample_data(train_data, self._batch_size, col=None, opt=None)
-                    
+
+                    real_inverse = self._transformer.inverse_transform(real)
+
+                    c2 = sample_pseudo_c1(real_inverse["pseudo_label"].values)
+                    c2 = torch.from_numpy(c2).to(self._device)
+
                     fake = self._generator(fakez)
                     fakeact = self._apply_activate(fake)
 
@@ -278,7 +307,7 @@ class CustomCTGAN(CTGAN):
 
                     if c1 is not None:
                         fake_cat = torch.cat([fakeact, c1], dim=1)
-                        real_cat = torch.cat([real, c1], dim=1)
+                        real_cat = torch.cat([real, c2], dim=1)
                     else:
                         real_cat = real
                         fake_cat = fakeact
@@ -291,8 +320,8 @@ class CustomCTGAN(CTGAN):
                         real_cat, fake_cat, self._device, self.pac
                     )
                     # TODO: Maybe change this loss
-                    loss_d = F.relu(1. - y_real).mean() + F.relu(1. + y_fake).mean()
-                    #loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
+                    #loss_d = F.relu(1. - y_real).mean() + F.relu(1. + y_fake).mean()
+                    loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
 
                     optimizerD.zero_grad(set_to_none=False)
                     pen.backward(retain_graph=True)
@@ -307,6 +336,10 @@ class CustomCTGAN(CTGAN):
                 # Sample conditional vector c1 from the condition values (pseudo-labels)
                 c1 = sample_pseudo_c1(condition_values)
                 
+                print(condition_values)
+                print(c1.shape)
+                print(c1)
+
                 if c1 is None:                   
                     c1 = self._data_sampler.sample_original_condvec(self._batch_size)
                     print("SAMPLING FROM ORIGINAL COND VEC, GEN STEP")
@@ -378,4 +411,4 @@ class CustomCTGAN(CTGAN):
 
 
             
-                
+        
