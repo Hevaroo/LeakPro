@@ -19,10 +19,10 @@ class CustomCTGAN(CTGAN):
                  discriminator_dim=(256, 256), 
                  generator_lr=0.0002, 
                  generator_decay=0.000001, 
-                 discriminator_lr=0.001, 
+                 discriminator_lr=0.0002, 
                  discriminator_decay=0.000001,
                  num_classes=5088,
-                 batch_size=2000, 
+                 batch_size=500, 
                  discriminator_steps=5,
                  log_frequency=True, 
                  verbose=False, 
@@ -158,10 +158,6 @@ class CustomCTGAN(CTGAN):
         self._validate_discrete_columns(train_data, discrete_columns)
         self._validate_null_data(train_data, discrete_columns)
 
-        # Set first column in discrete_columns to be the condition column
-        print(discrete_columns)
-
-
         # Convert "pseudo_label" column to categorical
         train_data["pseudo_label"] = train_data["pseudo_label"].astype("category")
 
@@ -206,21 +202,21 @@ class CustomCTGAN(CTGAN):
         self.loss_values = pd.DataFrame(columns=['Epoch', 'Generator Loss', 'Distriminator Loss', 'Inversion Loss'])
         
         
-        num_unused_discrete_categories = 0
-        for col in discrete_columns:
-            if col != "pseudo_label":
+        # num_unused_discrete_categories = 0
+        # for col in discrete_columns:
+        #     if col != "pseudo_label":
         
-                # Get categories in col
-                categories = original_train_data[col].unique()
-                num_unused_discrete_categories += len(categories)
-                for value in categories:
-                    info = self._transformer.convert_column_name_value_to_id(col, value)
-                    print( f"Column: {col}, Value: {value}, Info: {info}")
+        #         # Get categories in col
+        #         categories = original_train_data[col].unique()
+        #         num_unused_discrete_categories += len(categories)
+        #         for value in categories:
+        #             info = self._transformer.convert_column_name_value_to_id(col, value)
+        #             print( f"Column: {col}, Value: {value}, Info: {info}")
 
-                    c1 = self._data_sampler.generate_cond_from_condition_column_info(info, 1)
-                    # find index of the fist 1 in the condition vector
-                    index = np.where(c1[0] == 1)[0][0]
-                    print(f"Index: {index}")
+        #             c1 = self._data_sampler.generate_cond_from_condition_column_info(info, 1)
+        #             # find index of the fist 1 in the condition vector
+        #             index = np.where(c1[0] == 1)[0][0]
+        #             print(f"Index: {index}")
 
         def sample_pseudo_c1(condition_values):
             """
@@ -274,15 +270,10 @@ class CustomCTGAN(CTGAN):
                         )
                         c2 = c1[perm]
                     """
-
-
-
+                    # Sample condition values for the batch from original (not transformed) train_data
                     condition_values = original_train_data["pseudo_label"].sample(self._batch_size).values
                     # Sample conditional vector c1 from the condition values (pseudo-labels)
                     c1 = sample_pseudo_c1(condition_values)
-                    print(condition_values)
-                    print(c1.shape)
-                    print(c1)
 
                     if c1 is None:
                         c1 = self._data_sampler.sample_original_condvec(self._batch_size)   
@@ -295,9 +286,11 @@ class CustomCTGAN(CTGAN):
                     # Sample real data
                     real = self._data_sampler.sample_data(train_data, self._batch_size, col=None, opt=None)
 
-                    real_inverse = self._transformer.inverse_transform(real)
+                    # We want to sample the same condition values for the real data as we did for the fake data
+                    # They should be mismatched with real sampled data for discriminator training
+                    condition_values_real = original_train_data["pseudo_label"].sample(self._batch_size).values
 
-                    c2 = sample_pseudo_c1(real_inverse["pseudo_label"].values)
+                    c2 = sample_pseudo_c1(condition_values_real)
                     c2 = torch.from_numpy(c2).to(self._device)
 
                     fake = self._generator(fakez)
@@ -336,9 +329,9 @@ class CustomCTGAN(CTGAN):
                 # Sample conditional vector c1 from the condition values (pseudo-labels)
                 c1 = sample_pseudo_c1(condition_values)
                 
-                print(condition_values)
-                print(c1.shape)
-                print(c1)
+                # print(condition_values)
+                # print(c1.shape)
+                # print(c1)
 
                 if c1 is None:                   
                     c1 = self._data_sampler.sample_original_condvec(self._batch_size)
