@@ -207,7 +207,6 @@ class AttackPLGMI(AbstractMINV):
         """Prepare the attack."""
         logger.info("Preparing attack")
 
-        # loss_d = F.relu(1. - y_real).mean() + F.relu(1. + y_fake).mean()
         # Get the target model from the handler
         self.target_model = self.handler.target_model
         if self.data_format == "dataframe":
