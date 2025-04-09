@@ -15,7 +15,11 @@ for col in continuous_col_names:
     df[col].fillna(df[col].mean(), inplace=True)
      
 
+lab_events = pd.read_pickle("data/lab_events_grouped.pkl")
+lab_events['hadm_id'] = lab_events['hadm_id'].astype('int64')
 # Split the data into public and private based on "icd_code"
+
+df = df.merge(lab_events, on="hadm_id", how="left")
 
 # Sort the data based on "icd_code"
 df = df.sort_values(by='icd_code')
@@ -32,6 +36,8 @@ encoder = OrdinalEncoder(dtype=int, encoded_missing_value=-1)
 df[['gender']] = encoder.fit_transform(df[['gender']])
 df[['insurance']] = encoder.fit_transform(df[['insurance']])
 df[['race']] = encoder.fit_transform(df[['race']])
+
+df.fillna(False, inplace=True)
 
 
 # Public data: Patients with first half of all unique icd_codes
