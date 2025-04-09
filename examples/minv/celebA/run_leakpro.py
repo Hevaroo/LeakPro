@@ -42,6 +42,10 @@ if train:
 
     print(f"Train Accuracy: {train_acc}, Test Accuracy: {test_acc}")
 
+
+
+
+
 from leakpro import LeakPro
 from examples.minv.celebA.celebA_plgmi_handler import CelebA_InputHandler
 config_path = "audit.yaml"
