@@ -132,6 +132,7 @@ class AttackPLGMI(AbstractMINV):
         self.target_model.to(self.device)
         all_confidences = []
         self.target_model.to(self.device)
+        print(self.top_n)
 
         # TODO: Maybe this is handler/modality functions
         if self.data_format == "dataloader":
@@ -195,6 +196,8 @@ class AttackPLGMI(AbstractMINV):
                 pseudo_data = cudf.DataFrame(pseudo_data)
             else:
                 pseudo_data = pd.DataFrame(pseudo_data)
+
+            print(pseudo_data["pseudo_label"].unique())
         logger.info("Created pseudo dataloader")
 
         # pseudo_data is now a list of tuples (entry, pseudo_label)
@@ -234,14 +237,16 @@ class AttackPLGMI(AbstractMINV):
         # Get public dataloader
         self.public_dataloader = self.handler.get_public_dataloader(self.configs.batch_size)
 
-        # Get generator
+        # Train the GAN, TODO: Remove
+        self.gan_handler.trained_bool = False
 
-
-        # Train the GAN
         if not self.gan_handler.trained_bool:
             logger.info("GAN not trained, getting psuedo labels")
             # Top-n-selection to get pseudo labels
             self.pseudo_loader = self.top_n_selection()
+
+            # Print number of unique classes in pseudo_loader
+
 
             logger.info("Training the GAN")
             # TODO: Change this input structure to just pass the attack class
@@ -302,11 +307,11 @@ class AttackPLGMI(AbstractMINV):
 
         elif self.data_format == "dataframe":
             # Accuracy of the target model on the random labels
-            initial_metrics = TabularMetrics(self.handler, self.gan_handler,
-                                        reconstruction_configs,
-                                        labels=labels,
-                                        z=random_z)
-            logger.info("INITIAL ACCURACY:", initial_metrics.results)
+            # initial_metrics = TabularMetrics(self.handler, self.gan_handler,
+            #                             reconstruction_configs,
+            #                             labels=labels,
+            #                             z=random_z)
+            # logger.info("INITIAL ACCURACY:", initial_metrics.results)
 
             # generate samples from the generator
             if self.handler.configs.target.model_type == "xgboost":
@@ -315,14 +320,6 @@ class AttackPLGMI(AbstractMINV):
             elif self.handler.configs.target.model_type == "pytorch_tabular":
                 opt_z = self.optimize_z_grad(y=labels,
                                 iter_times=self.configs.z_optimization_iter, augment=False).to(self.device)
-
-
-
-            pre_z_opt = TabularMetrics(self.handler, self.gan_handler,
-                                        reconstruction_configs,
-                                        labels=labels,
-                                        z=random_z)
-            logger.info(pre_z_opt.results)
 
             metrics = TabularMetrics(self.handler, self.gan_handler,
                                         reconstruction_configs,
@@ -377,6 +374,11 @@ class AttackPLGMI(AbstractMINV):
             # Generate fake images
             fake = self.generator(z, y)
 
+            if self.handler.configs.target.model_type == "pytorch_tabular":
+                y = fake["pseudo_label"].values
+                y = torch.tensor(y, dtype=torch.long).to(self.device)
+                fake = fake.drop(columns=["pseudo_label"])
+
             out1 = self.target_model(aug_list(fake))
             out2 = self.target_model(aug_list(fake))
             # compute the loss
@@ -395,8 +397,8 @@ class AttackPLGMI(AbstractMINV):
 
             if (i + 1) % self.log_interval == 0:
                 with torch.no_grad():
-                    fake_img = self.generator(z, y)
-                    eval_prob = self.evaluation_model(fake_img)
+                    #fake_img = self.generator(z, y)
+                    eval_prob = self.evaluation_model(fake)
                     eval_iden = torch.argmax(eval_prob, dim=1).view(-1)
                     acc = y.eq(eval_iden.long()).sum().item() * 1.0 / bs
                     logger.info("Iteration:{}\tInv Loss:{:.2f}\tAttack Acc:{:.2f}".format(i + 1, inv_loss_val, acc))

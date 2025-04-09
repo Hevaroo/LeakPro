@@ -4,8 +4,9 @@ audit:  # Configurations for auditing
   data_modality: "image" #image, tabular
   attack_list:
     plgmi:
-      n_dis: 2 # Integer number for indicating the number of discriminator updates per generator update
-      n_iter: 120 # Integer number for indicating the iterations for training the GAN
+      top_n: 200 # Integer number indicating how many pseudo-labels to select
+      n_dis: 4 # Integer number for indicating the number of discriminator updates per generator update
+      n_iter: 100 # Integer number for indicating the iterations for training the GAN
       batch_size: 100 # Integer number for indicating batch size for training the GAN
       gen_lr: 0.1 # Float number for indicating learning rate for training the generator
       dis_lr: 0.1 # Float number for indicating learning rate for training the discriminator
@@ -14,16 +15,16 @@ audit:  # Configurations for auditing
       dis_beta1: 0.0 # Float number for indicating beta1 for Adam optimizer
       dis_beta2: 0.9 # Float number for indicating beta2 for Adam optimizer
       dim_z: &dim_z 256 # Integer number for indicating the dimension of the latent space
-      alpha: 0.3 # Float number for indicating the weight of the gradient penalty
+      alpha: 0.2 # Float number for indicating the weight of the gradient penalty
       log_interval: 10 # Integer number for indicating the interval for logging the information
-      z_optimization_iter: 1000 # Integer number for indicating the iterations for optimizing the latent code
-      z_optimization_lr: 0.0002 # Float number for indicating the learning rate for optimizing the latent code
-      num_classes: &n_cls 705
+      z_optimization_iter: 500 # Integer number for indicating the iterations for optimizing the latent code
+      z_optimization_lr: 0.0000002 # Float number for indicating the learning rate for optimizing the latent code
+      num_classes: &n_cls 35
       data_format : "dataframe"
       generator:
         module_path: "./utils/CTGAN_extended.py"
         model_class: "CustomCTGAN"
-        #checkpoint_path: "ctgan.pth"
+        checkpoint_path: "ctgan.pkl"
         init_params:
           embedding_dim: *dim_z
           verbose: True
@@ -36,9 +37,9 @@ audit:  # Configurations for auditing
         #init_params:
           #num_classes: *n_cls
   reconstruction:
-    batch_size: 32 # Integer number for indicating batch size in reconstruction
-    num_class_samples: 2 # Number of samples to generate for each class
-    num_audited_classes: 200 # Number of classes to audit
+    batch_size: 100 # Integer number for indicating batch size in reconstruction
+    num_class_samples: 5 # Number of samples to generate for each class
+    num_audited_classes: 35 # Number of classes to audit
     metrics:
       accuracy:
 
