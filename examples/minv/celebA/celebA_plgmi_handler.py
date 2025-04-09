@@ -131,6 +131,9 @@ class CelebA_InputHandler(AbstractInputHandler):
         dis_losses = []
         inv_losses = []
         
+        gen.load_state_dict(torch.load('./gen_3000.pth'))
+        dis.load_state_dict(torch.load('./dis_3000.pth'))
+        
         # Augmentations for generated images. TODO: Move this to a image modality extension and have it as an input
         aug_list = kornia.augmentation.container.ImageSequential(
             kornia.augmentation.RandomResizedCrop((64, 64), scale=(0.8, 1.0), ratio=(1.0, 1.0)),
@@ -158,7 +161,7 @@ class CelebA_InputHandler(AbstractInputHandler):
                     # Generator update
                     fake, fake_labels, _ = sample_from_generator()
                     fake_aug = aug_list(fake).to(device)
-                    dis_fake = dis(fake_aug, fake_labels)
+                    dis_fake = dis(fake, fake_labels)
                     inv_loss = inv_criterion(target_model(fake_aug), fake_labels)
 
                     inv_losses.append(inv_loss.item())
@@ -206,6 +209,10 @@ class CelebA_InputHandler(AbstractInputHandler):
                         'iteration: {:05d}/{:05d}, loss gen: {:05f}, loss dis {:05f}, inv loss {:05f}, target acc {:04f}, time {}'.format(
                             i, n_iter, _l_g, cumulative_loss_dis / n_dis, cumulative_inv_loss,
                             cumulative_target_acc / n_dis, time.strftime("%H:%M:%S")))
+                
+            if i % 3000 == 0 and i > 0:
+                torch.save(gen.state_dict(), f'./gen_{i}.pth')
+                torch.save(dis.state_dict(), f'./dis_{i}.pth')
                 
         torch.save(gen.state_dict(), './gen.pth')
         torch.save(dis.state_dict(), './dis.pth')

@@ -3,3 +3,4 @@ data/*
 
 leakpro_output/*
 target/*
+*.gz

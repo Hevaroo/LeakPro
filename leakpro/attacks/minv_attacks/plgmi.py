@@ -124,7 +124,7 @@ class AttackPLGMI(AbstractMINV):
         }
 
 
-    def top_n_selection(self:Self) -> DataLoader:  # noqa: C901
+    def top_n_selection(self:Self) -> DataLoader:  # noqa: C901, PLR0912
         """"Top n selection of pseudo labels."""
         # TODO: This does not scale well. Consider creating a class for the dataloader and implementing the __getitem__ method.
         logger.info("Performing top-n selection for pseudo labels")
@@ -235,9 +235,6 @@ class AttackPLGMI(AbstractMINV):
         # Get public dataloader
         self.public_dataloader = self.handler.get_public_dataloader(self.configs.batch_size)
 
-        # Get generator
-
-
         # Train the GAN
         if not self.gan_handler.trained_bool:
             logger.info("GAN not trained, getting psuedo labels")
@@ -344,6 +341,11 @@ class AttackPLGMI(AbstractMINV):
             y (torch.tensor): The class labels.
             lr (float): The learning rate for optimization.
             iter_times (int): The number of iterations for optimization.
+            augment (bool): Whether to apply data augmentation.
+
+        Returns:
+        -------
+            torch.tensor: Optimized latent vectors.
 
         """
         bs = y.shape[0] # Number of samples

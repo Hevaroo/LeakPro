@@ -38,7 +38,7 @@ df[['race']] = encoder.fit_transform(df[['race']])
 private_df = df[df['identity'] < df['identity'].nunique() // 2]
 
 
-private_df = private_df.groupby("identity").filter(lambda x: len(x) > 99)
+private_df = private_df.groupby("identity").filter(lambda x: len(x) > 1000)
 
 # add all examples in df not in private to public_df
 public_df = df.drop(private_df.index)
