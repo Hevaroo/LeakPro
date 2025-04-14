@@ -18,12 +18,12 @@ class CustomCTGAN(CTGAN):
                  embedding_dim=256, 
                  generator_dim=(256, 256), 
                  discriminator_dim=(256, 256), 
-                 generator_lr=0.00001,
-                 generator_decay=0.0000001, 
-                 discriminator_lr=0.00001, 
-                 discriminator_decay=0.0000001,
+                 generator_lr = 2e-4,
+                 generator_decay=1e-6,
+                 discriminator_lr=2e-5,
+                 discriminator_decay=1e-7,
                  num_classes=5088,
-                 batch_size=100, 
+                 batch_size=500, 
                  discriminator_steps=5,
                  log_frequency=True, 
                  verbose=False, 
@@ -73,16 +73,19 @@ class CustomCTGAN(CTGAN):
             raise ValueError("The transformer has not been initialized. Please call the `fit` method first.")
 
         condition_column = "pseudo_label"
-        condition_values = y.detach().cpu().numpy()
-
-        # TODO: Check this logic
-        condition_values = condition_values[:1]
-        
+    
         if y is not None:
             # Batch size is length of y
             bs = y.shape[0]
+            condition_values = y.detach().cpu().numpy()
+
+            # TODO: Check this logic
+            condition_values = condition_values[:1]
+            
         else:
-            bs = self._batch_size
+            bs = z.shape[0]
+            condition_values = [None] * z.shape[0]
+
 
         samples = pd.DataFrame()
         
@@ -95,18 +98,18 @@ class CustomCTGAN(CTGAN):
                     global_condition_vec = self._data_sampler.generate_cond_from_condition_column_info(
                         condition_info, bs
                     )
+                    print(global_condition_vec.shape)
                 except ValueError:
                     # If the transformer has not seen the condition value in training, it will raise a ValueError
                     # We still want to be able to sample, so we set the global_condition_vec to None
                     global_condition_vec = None
-                    print("SETTING GLOBAL VEC TO NONE")
             else:
                 global_condition_vec = None
 
             data = []
-            mean = torch.zeros(bs, self._embedding_dim)
-            std = mean + 1
             if z is None:
+                mean = torch.zeros(bs, self._embedding_dim)
+                std = mean + 1
                 fakez = torch.normal(mean=mean, std=std).to(self._device)
             else:
                 fakez = z
@@ -134,7 +137,7 @@ class CustomCTGAN(CTGAN):
             # add row to samples
             samples = pd.concat([samples, sample])
         return samples
-
+    
     def fit2(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, n_iter, n_dis, alpha = 0.1, discrete_columns=(), use_inv_loss=True):
         """
         Fit the CTGAN model to the training data using pseudo-labeled guidance as in the PLG-MI attack.
@@ -264,8 +267,17 @@ class CustomCTGAN(CTGAN):
 
         epoch_iterator = tqdm(range(epochs), disable=(not self._verbose))
         if self._verbose:
-            description = 'Gen. ({gen:.2f}) | Discrim. ({dis:.2f}) | Inv. ({inv:.2f}) | Acc. ({acc:.2f})'
-            epoch_iterator.set_description(description.format(gen=0, dis=0, inv=0, acc=0))
+            description = 'Gen. ({gen:.4f}) | Dis. ({dis:.4f}) | Inv. ({inv:.4f}) | CE. ({c_loss:.4f}) | Acc. ({acc:.4f})'
+            epoch_iterator.set_description(description.format(gen=0, dis=0, inv=0, c_loss=0, acc=0))
+
+        # Set constant mask to always condition on pseudo-label
+        pl_condition_info = self._transformer.convert_column_name_value_to_id(
+                        'pseudo_label', 0
+                    )
+        m1 = np.zeros(len(discrete_columns))
+        m1[pl_condition_info['discrete_column_id']] = 1
+        m1 = [m1]*self._batch_size
+        m1 = torch.from_numpy(np.array(m1)).to(self._device)
 
         steps_per_epoch = max(len(train_data) // self._batch_size, 1)
         for i in epoch_iterator:
@@ -334,8 +346,8 @@ class CustomCTGAN(CTGAN):
                         real_cat, fake_cat, self._device, self.pac
                     )
                     # TODO: Maybe change this loss
-                    loss_d = F.relu(1. - y_real).mean() + F.relu(1. + y_fake).mean()
-                    #loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
+                    #loss_d = F.relu(1. - y_real).mean() + F.relu(1. + y_fake).mean()
+                    loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
 
                     optimizerD.zero_grad(set_to_none=False)
                     pen.backward(retain_graph=True)
@@ -366,30 +378,34 @@ class CustomCTGAN(CTGAN):
                 else:
                     y_fake = discriminator(fakeact)
 
-                # Pseudo label batch is last column of fakeact
-                #pseudo_label_batch = torch.from_numpy(condition_values).to(self._device)
-                
-                # We want the pseudo_label_batch to be the same as the condition values
-                pseudo_label_batch = torch.tensor(condition_values, device=self._device)
-
                 # Fake feature vector
                 fakefeat = fakeact
                 
                 fakefeat = fakefeat.detach().cpu().numpy()
                      
                 sample = self._transformer.inverse_transform(fakefeat)
-                #sample_copy = sample.copy()
 
+                #sample_copy = sample.copy()
+                pseudo_label_batch = sample['pseudo_label'].values
+                pseudo_label_batch = torch.tensor(pseudo_label_batch, device=self._device)
                 #remove 'pseudo_label' column
                 sample = sample.drop(columns=['pseudo_label'])                
-                
+            
                 if condvec is None or not use_inv_loss:
                     inv_loss = 0
                 else:
                     inv_loss  = inv_criterion(target_model(sample), pseudo_label_batch)
 
+                # Define m1, the mask for the condition vector
+                # Since we are always condit
+                if condvec is None:
+                    cross_entropy = 0
+                else:
+                    cross_entropy = self._cond_loss(fake, c1, m1)
+
+                beta = 0.5
                 loss_g = gen_criterion(y_fake)
-                loss_all = loss_g + inv_loss*alpha
+                loss_all = loss_g + inv_loss*alpha + beta*cross_entropy
 
                 optimizerG.zero_grad(set_to_none=False)
                 loss_all.backward()
@@ -414,11 +430,14 @@ class CustomCTGAN(CTGAN):
                 acc = (T_preds == pseudo_label_batch).sum() / count
                 acc = acc.item()
 
+            cross_entropy = cross_entropy.detach().cpu().item()
+            
             epoch_loss_df = pd.DataFrame({
                 'Epoch': [i],
                 'Generator Loss': [generator_loss],
                 'Discriminator Loss': [discriminator_loss],
                 'Inversion Loss': [inversion_loss],
+                'Conditioning Loss (CE)': [cross_entropy],
                 'Accuracy' : [acc]
             })
             if not self.loss_values.empty:
@@ -430,10 +449,8 @@ class CustomCTGAN(CTGAN):
 
             if self._verbose:
                 epoch_iterator.set_description(
-                    description.format(gen=generator_loss, dis=discriminator_loss, inv=inversion_loss, acc=acc)
+                    description.format(gen=generator_loss, dis=discriminator_loss, inv=inversion_loss,c_loss=cross_entropy, acc=acc)
                 )
-
-
 
     def fit(self, train_data, target_model, num_classes, inv_criterion, gen_criterion, dis_criterion, n_iter, n_dis, alpha = 0.1, discrete_columns=(), use_inv_loss=True):
         """
@@ -488,43 +505,25 @@ class CustomCTGAN(CTGAN):
             self._generator.parameters(),
             lr=self._generator_lr,
             betas=(0.5, 0.9),
-            #weight_decay=self._generator_decay,
+            weight_decay=self._generator_decay,
         )
 
         optimizerD = optim.Adam(
             discriminator.parameters(),
             lr=self._discriminator_lr,
             betas=(0.5, 0.9),
-            #weight_decay=self._discriminator_decay,
+            weight_decay=self._discriminator_decay,
         )
 
         mean = torch.zeros(self._batch_size, self._embedding_dim, device=self._device)
         std = mean + 1
 
-        self.loss_values = pd.DataFrame(columns=['Epoch', 'Generator Loss', 'Distriminator Loss', 'Inversion Loss'])
-        
-        
-        # num_unused_discrete_categories = 0
-        # for col in discrete_columns:
-        #     if col != "pseudo_label":
-        
-        #         # Get categories in col
-        #         categories = original_train_data[col].unique()
-        #         num_unused_discrete_categories += len(categories)
-        #         for value in categories:
-        #             info = self._transformer.convert_column_name_value_to_id(col, value)
-        #             print( f"Column: {col}, Value: {value}, Info: {info}")
-
-        #             c1 = self._data_sampler.generate_cond_from_condition_column_info(info, 1)
-        #             # find index of the fist 1 in the condition vector
-        #             index = np.where(c1[0] == 1)[0][0]
-        #             print(f"Index: {index}")
-
+        self.loss_values = pd.DataFrame(columns=['Epoch', 'Generator Loss', 'Distriminator Loss', 'Inversion Loss', 'C_loss'])
 
         epoch_iterator = tqdm(range(epochs), disable=(not self._verbose))
         if self._verbose:
-            description = 'Gen. ({gen:.2f}) | Discrim. ({dis:.2f}) | Inv. ({inv:.2f}) | Acc. ({acc:.2f})'
-            epoch_iterator.set_description(description.format(gen=0, dis=0, inv=0, acc=0))
+            description = 'Gen. ({gen:.2f}) | Dis. ({dis:.2f}) | Inv. ({inv:.2f}) | CE. ({c_loss:.2f}) | Acc. ({acc:.2f})'
+            epoch_iterator.set_description(description.format(gen=0, dis=0, inv=0, c_loss=0, acc=0))
 
         steps_per_epoch = max(len(train_data) // self._batch_size, 1)
         for i in epoch_iterator:
@@ -619,13 +618,21 @@ class CustomCTGAN(CTGAN):
                 #remove 'pseudo_label' column
                 sample = sample.drop(columns=['pseudo_label'])                
                 
+                # if condvec is None or not use_inv_loss
                 if condvec is None or not use_inv_loss:
                     inv_loss = 0
                 else:
                     inv_loss  = inv_criterion(target_model(sample), pseudo_label_batch)
 
+                if condvec is None:
+                    cross_entropy = 0
+                else:
+                    cross_entropy = self._cond_loss(fake, c1, m1)
+
+                beta = 0.3
+                # TODO: check c1 perhaps p_label should be replaced with sample label, CE
                 loss_g = gen_criterion(y_fake)
-                loss_all = loss_g + inv_loss*alpha
+                loss_all = loss_g + inv_loss*alpha + beta*cross_entropy 
 
                 optimizerG.zero_grad(set_to_none=False)
                 loss_all.backward()
@@ -650,11 +657,14 @@ class CustomCTGAN(CTGAN):
                 acc = (T_preds == pseudo_label_batch).sum() / count
                 acc = acc.item()
 
+            cross_entropy = cross_entropy.detach().cpu().item()
+            
             epoch_loss_df = pd.DataFrame({
                 'Epoch': [i],
                 'Generator Loss': [generator_loss],
                 'Discriminator Loss': [discriminator_loss],
                 'Inversion Loss': [inversion_loss],
+                'Conditioning Loss (CE)': [cross_entropy],
                 'Accuracy' : [acc]
             })
             if not self.loss_values.empty:
@@ -666,7 +676,7 @@ class CustomCTGAN(CTGAN):
 
             if self._verbose:
                 epoch_iterator.set_description(
-                    description.format(gen=generator_loss, dis=discriminator_loss, inv=inversion_loss, acc=acc)
+                    description.format(gen=generator_loss, dis=discriminator_loss, inv=inversion_loss,c_loss=cross_entropy, acc=acc)
                 )
             
         

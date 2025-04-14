@@ -8,6 +8,7 @@ from leakpro.attacks.utils import gan_losses
 from leakpro.schemas import TrainingOutput
 import pickle
 import pandas as pd
+from ctgan import CTGAN
 
 class Mimic_InputHandler(AbstractInputHandler):
     """Class to handle the user input for the CelebA dataset for plgmi attack."""
@@ -130,15 +131,21 @@ class Mimic_InputHandler(AbstractInputHandler):
         torch.backends.cudnn.benchmark = True
 
         target_model.to(device)
-        
-        ctgan = gen
-        
         continuous_col_names = ['length_of_stay', 'num_procedures', 'num_medications', 'BMI',
        'BMI (kg/m2)', 'Height', 'Height (Inches)', 'Weight', 'Weight (Lbs)',
        'eGFR', 'systolic', 'diastolic']
         # Categorical column names, the rest are categorical
         discrete_columns = [col for col in pseudo_loader.dataset.columns if col not in continuous_col_names]
         
+        #gen = CTGAN(epochs = n_iter , verbose=True)
+
+        #gen.fit(train_data = pseudo_loader.dataset, discrete_columns = discrete_columns)
+
+        #gen.save("ctgan_standard.pkl")
+       
+        ctgan = gen
+        
+         
         #print(discrete_columns)
         
         #print(pseudo_loader.dataset.head())
@@ -154,10 +161,9 @@ class Mimic_InputHandler(AbstractInputHandler):
                     use_inv_loss=True,
                     n_iter=n_iter,
                     n_dis=n_dis)
-        
-        ctgan.save("ctgan.pkl")
-        
-
+        #gen.fit(train_data = pseudo_loader.dataset, discrete_columns = discrete_columns)
+        ctgan.save("ctgan_fit2.pkl")
+    
         
     
-    
+ 

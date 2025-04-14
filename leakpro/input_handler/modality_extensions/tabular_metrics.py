@@ -83,10 +83,14 @@ class TabularMetrics:
             generated_samples, _, _ = self.generator_handler.sample_from_generator(batch_size=self.num_class_samples + 1, # TODO: Move to configs asserts, num_class_samples ge 2
                                                                             label=label_i,
                                                                             z=z_i)
-            
+
+            print(generated_samples)
+
             generated_samples = generated_samples.drop(columns=["pseudo_label"])
             output = self.evaluation_model(generated_samples)
             prediction = torch.argmax(output, dim=1)
+            print(label_i)
+            print(prediction)
             correct_predictions.append(prediction == label_i)
 
         correct_predictions = torch.cat(correct_predictions).float()

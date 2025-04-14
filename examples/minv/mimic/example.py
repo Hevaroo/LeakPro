@@ -6,8 +6,6 @@ from pytorch_tabular import TabularModel
 from pytorch_tabular.models import CategoryEmbeddingModelConfig, TabNetModelConfig, GANDALFConfig
 from pytorch_tabular.config import DataConfig, OptimizerConfig, TrainerConfig
 import pandas as pd
-import omegaconf
-import torch
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -33,8 +31,8 @@ num_classes = audit_config["audit"]["attack_list"]["plgmi"]["num_classes"]
 path = os.path.join(os.getcwd(), train_config["data"]["data_dir"])
 data_dir =  train_config["data"]["data_dir"] + "/private_df.pkl"
 
-df = pd.read_pickle(data_dir)
 
+df = pd.read_pickle(data_dir)
 
 # Reset index to have a clean, sequential integer index
 df = df.reset_index(drop=True)
@@ -59,6 +57,8 @@ df_val = df_val[df_val["identity"].isin(df_train["identity"])]
 df_val = df_val.reset_index(drop=True)
 
 
+print(df_train)
+
 #print number of unique classes in df_train
 print("Number of unique classes in df_train: ", df_train["identity"].nunique())
 
@@ -66,8 +66,7 @@ train = False
 if train:
     # Continous column names
     continuous_col_names = ['length_of_stay', 'num_procedures', 'num_medications', 'BMI',
-       'BMI (kg/m2)', 'Height', 'Height (Inches)', 'Weight', 'Weight (Lbs)',
-       'eGFR', 'systolic', 'diastolic']
+       'BMI (kg/m2)', 'Height (Inches)', 'Weight', 'Weight (Lbs)']
     # Categorical column names, the rest are categorical
     categorical_col_names = [col for col in df.columns if col not in continuous_col_names]
     # Remove the target column
@@ -84,8 +83,7 @@ if train:
     trainer_config = TrainerConfig(
         auto_lr_find=False,
         batch_size=256,
-        min_epochs=400,
-        max_epochs=450,
+        max_epochs=100,
         early_stopping='train_loss_0',
     )
 
@@ -93,7 +91,7 @@ if train:
 
     model_config = CategoryEmbeddingModelConfig(
         task="classification",
-        layers="2048-1024-1024-1024-512-512-256",
+        layers="2048-1024-512-256",
         activation="ReLU",
         learning_rate=1e-3,
     )
