@@ -98,7 +98,6 @@ class CustomCTGAN(CTGAN):
                     global_condition_vec = self._data_sampler.generate_cond_from_condition_column_info(
                         condition_info, bs
                     )
-                    print(global_condition_vec.shape)
                 except ValueError:
                     # If the transformer has not seen the condition value in training, it will raise a ValueError
                     # We still want to be able to sample, so we set the global_condition_vec to None

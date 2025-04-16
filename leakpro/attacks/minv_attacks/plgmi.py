@@ -132,7 +132,6 @@ class AttackPLGMI(AbstractMINV):
         self.target_model.to(self.device)
         all_confidences = []
         self.target_model.to(self.device)
-        print(self.top_n)
 
         # TODO: Maybe this is handler/modality functions
         if self.data_format == "dataloader":
@@ -197,7 +196,6 @@ class AttackPLGMI(AbstractMINV):
             else:
                 pseudo_data = pd.DataFrame(pseudo_data)
 
-            print(pseudo_data["pseudo_label"].unique())
         logger.info("Created pseudo dataloader")
 
         # pseudo_data is now a list of tuples (entry, pseudo_label)
@@ -283,9 +281,9 @@ class AttackPLGMI(AbstractMINV):
         num_audited_classes = reconstruction_configs.num_audited_classes
 
         # Get random labels
-        #labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
+        labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
         # Get range of labels from 0 to num_audited_classes
-        labels = torch.arange(num_audited_classes).to(self.device)
+        #labels = torch.arange(num_audited_classes).to(self.device)
 
         random_z = torch.randn(num_audited_classes, self.generator.dim_z, device=self.device)
 
@@ -314,18 +312,18 @@ class AttackPLGMI(AbstractMINV):
             # generate samples from the generator
             if self.handler.configs.target.model_type == "xgboost":
                 opt_z = self.optimize_z_no_grad(y=labels,
-                                iter_times=self.configs.z_optimization_iter).to(self.device)
+                                iter_times=self.configs.z_optimization_iter)
             elif self.handler.configs.target.model_type == "pytorch_tabular":
-                opt_z = self.optimize_z_grad(y=labels,
-                                iter_times=self.configs.z_optimization_iter, augment=False).to(self.device)
+                opt_z, labels = self.optimize_z_grad_tabular(y=labels,
+                                iter_times=self.configs.z_optimization_iter)
 
             metrics = TabularMetrics(self.handler, self.gan_handler,
                                         reconstruction_configs,
-                                        labels=labels,
-                                        z=opt_z)
+                                        labels=labels.to(self.device),
+                                        z=opt_z.to(self.device))
         logger.info(metrics.results)
 
-        return metrics.results
+        return metrics
 
     def optimize_z_grad(self:Self,
                    y: torch.tensor,
@@ -377,11 +375,6 @@ class AttackPLGMI(AbstractMINV):
             # Generate fake images
             fake = self.generator(z, y)
 
-            if self.handler.configs.target.model_type == "pytorch_tabular":
-                y = fake["pseudo_label"].values
-                y = torch.tensor(y, dtype=torch.long).to(self.device)
-                fake = fake.drop(columns=["pseudo_label"])
-
             out1 = self.target_model(aug_list(fake))
             out2 = self.target_model(aug_list(fake))
             # compute the loss
@@ -400,13 +393,91 @@ class AttackPLGMI(AbstractMINV):
 
             if (i + 1) % self.log_interval == 0:
                 with torch.no_grad():
-                    #fake_img = self.generator(z, y)
                     eval_prob = self.evaluation_model(fake)
                     eval_iden = torch.argmax(eval_prob, dim=1).view(-1)
                     acc = y.eq(eval_iden.long()).sum().item() * 1.0 / bs
                     logger.info("Iteration:{}\tInv Loss:{:.2f}\tAttack Acc:{:.2f}".format(i + 1, inv_loss_val, acc))
 
         return z
+
+
+    def optimize_z_grad_tabular(self:Self,
+                   y: torch.tensor,
+                   iter_times: int = 10) -> torch.tensor:
+        """Find the optimal latent vectors z for labels y.
+
+        Args:
+        ----
+            y (torch.tensor): The class labels.
+            lr (float): The learning rate for optimization.
+            iter_times (int): The number of iterations for optimization.
+            augment (bool): Whether to apply data augmentation.
+
+        Returns:
+        -------
+            torch.tensor: Optimized latent vectors.
+
+        """
+        bs = y.shape[0] # Number of samples
+        y = y.view(-1).long().to(self.device)
+        y0 = y.clone()
+
+        self.generator.eval()
+        self.generator.to(self.device)
+        self.target_model.eval()
+        self.target_model.to(self.device)
+        self.evaluation_model.eval()
+        self.evaluation_model.to(self.device)
+
+        logger.info("Optimizing z for the PLG-MI attack")
+
+        z = torch.randn(bs, self.generator.dim_z, device=self.device, requires_grad=True)
+        z.requires_grad = True
+
+        optimizer = torch.optim.Adam([z], lr=self.configs.z_optimization_lr)
+
+        min_loss = 1e10
+
+        for i in range(iter_times):
+            # Generate fake images
+            fake = self.generator(z, y0)
+
+            if self.handler.configs.target.model_type == "pytorch_tabular":
+                y = fake["pseudo_label"].values
+                y = torch.tensor(y, dtype=torch.long).to(self.device)
+                fake = fake.drop(columns=["pseudo_label"])
+
+            out1 = self.target_model(fake)
+            out2 = self.target_model(fake)
+            # compute the loss
+
+            inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
+
+            if inv_loss < min_loss:
+                min_loss = inv_loss
+                # Save the best z
+                best_z = z.clone()
+                best_y = y.clone()
+
+            if z.grad is not None:
+                z.grad.data.zero_()
+
+            # Update the latent vector z
+            optimizer.zero_grad()
+            inv_loss.backward()
+            optimizer.step()
+
+            inv_loss_val = inv_loss.item()
+
+            if (i + 1) % self.log_interval == 0:
+                with torch.no_grad():
+                    eval_prob = self.evaluation_model(fake)
+                    eval_iden = torch.argmax(eval_prob, dim=1).view(-1)
+                    acc = y.eq(eval_iden.long()).sum().item() * 1.0 / bs
+                    logger.info("Iteration:{}\tInv Loss:{:.2f}\tAttack Acc:{:.2f}".format(i + 1, inv_loss_val, acc))
+
+        logger.info("Best Inv Loss: {:.2f}".format(min_loss))
+        return best_z, best_y
 
     def optimize_z_no_grad(self, y: torch.tensor, iter_times: int = 10) -> torch.tensor:
         """Find the optimal latent vectors z for labels y.

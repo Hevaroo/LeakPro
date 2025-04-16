@@ -17,14 +17,14 @@ audit:  # Configurations for auditing
       dim_z: &dim_z 256 # Integer number for indicating the dimension of the latent space
       alpha: 0.02 # Float number for indicating the weight of the gradient penalty
       log_interval: 10 # Integer number for indicating the interval for logging the information
-      z_optimization_iter: 100 # Integer number for indicating the iterations for optimizing the latent code
-      z_optimization_lr: 0.000002 # Float number for indicating the learning rate for optimizing the latent code
+      z_optimization_iter: 1000 # Integer number for indicating the iterations for optimizing the latent code
+      z_optimization_lr: 0.002 # Float number for indicating the learning rate for optimizing the latent code
       num_classes: &n_cls 35
       data_format : "dataframe"
       generator:
         module_path: "./utils/CTGAN_extended.py"
         model_class: "CustomCTGAN"
-        #checkpoint_path: "ctgan.pkl"
+        checkpoint_path: "ctgan_backup.pkl"
         init_params:
           embedding_dim: *dim_z
           verbose: True
@@ -53,7 +53,7 @@ target:
   model_class: "TabularWrapper"
   model_type: "pytorch_tabular"
   # Data paths
-  target_folder: "./target"
+  target_folder: "./target/target"
   data_path: "./data/private_df.pkl"
   public_data_path: "./data/public_df.pkl"
 
