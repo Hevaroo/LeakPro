@@ -51,9 +51,9 @@ train_indices = df_train_min.index.union(df_train_remaining.index)
 df_train = df.loc[train_indices]
 
 # Create df_val by taking the rest of the samples
-df_val = df.drop(train_indices)
-df_val = df_val[df_val["identity"].isin(df_train["identity"])]
-df_val = df_val.reset_index(drop=True)
+df_test = df.drop(train_indices)
+df_test = df_test[df_test["identity"].isin(df_train["identity"])]
+df_test = df_test.reset_index(drop=True)
 
 #print number of unique classes in df_train
 print("Number of unique classes in df_train: ", df_train["identity"].nunique())
@@ -61,10 +61,10 @@ print("Number of unique classes in df_train: ", df_train["identity"].nunique())
 
 # Print shape of df_train, df_val
 print("Shape of df_train: ", df_train.shape)
-print("Shape of df_val: ", df_val.shape)
+print("Shape of df_test: ", df_test.shape)
 
 # Print the categories in identity
-train = False
+train = True
 if train:
     # Continous column names
     continuous_col_names = ['length_of_stay', 'num_procedures', 'num_medications', 'Height (Inches)','Weight (Lbs)', 'BMI (kg/m2)']
@@ -112,12 +112,9 @@ if train:
         trainer_config=trainer_config
     )
 
-    tabular_model.fit(train=df_train, validation=df_val)
-    results = tabular_model.evaluate(df_val)
-    results_2 = tabular_model.evaluate(df_train)
-    print("train results: ", results_2)
-    pred_df = tabular_model.predict(df_val.drop(columns=["identity"]))
-    print("validation preds: ", pred_df["identity_prediction"].value_counts())
+    tabular_model.fit(train=df_train)
+    results = tabular_model.evaluate(df_test)
+    pred_df = tabular_model.predict(df_test.drop(columns=["identity"]))
     # Save the model
     tabular_model.save_model("./target/")
 

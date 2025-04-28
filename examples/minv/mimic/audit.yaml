@@ -56,7 +56,7 @@ target:
   model_class: "TabularWrapper"
   model_type: "pytorch_tabular"
   # Data paths
-  target_folder: "./target/target"
+  target_folder: "./target"
   data_path: "./data/private_df.pkl"
   public_data_path: "./data/public_df.pkl"
 
