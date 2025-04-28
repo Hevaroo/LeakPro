@@ -282,9 +282,9 @@ class AttackPLGMI(AbstractMINV):
         num_audited_classes = reconstruction_configs.num_audited_classes
 
         # Get random labels
-        #labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
+        labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
         # Get range of labels from 0 to num_audited_classes
-        labels = torch.arange(num_audited_classes).to(self.device)
+        #labels = torch.arange(num_audited_classes).to(self.device)
 
         random_z = torch.randn(num_audited_classes, self.generator.dim_z, device=self.device)
 
@@ -313,16 +313,17 @@ class AttackPLGMI(AbstractMINV):
             # generate samples from the generator
             if self.handler.configs.target.model_type == "xgboost":
                 opt_z = self.optimize_z_no_grad(y=labels,
-                                iter_times=self.configs.z_optimization_iter).to(self.device)
+                                iter_times=self.configs.z_optimization_iter)
             elif self.handler.configs.target.model_type == "pytorch_tabular":
-                opt_z = self.optimize_z_grad(y=labels,
-                                iter_times=self.configs.z_optimization_iter, augment=False).to(self.device)
+                opt_z, labels = self.optimize_z_grad_tabular(y=labels,
+                                iter_times=self.configs.z_optimization_iter)
 
             metrics = TabularMetrics(self.handler, self.gan_handler,
                                         reconstruction_configs,
                                         labels=labels,
                                         z=opt_z)
 
+        return metrics
         return metrics
 
     def optimize_z_grad(self:Self,
@@ -404,7 +405,6 @@ class AttackPLGMI(AbstractMINV):
 
             if (i + 1) % self.log_interval == 0:
                 with torch.no_grad():
-                    #fake_img = self.generator(z, y)
                     eval_prob = self.evaluation_model(fake)
                     eval_iden = torch.argmax(eval_prob, dim=1).view(-1)
                     acc = y.eq(eval_iden.long()).sum().item() * 1.0 / bs

@@ -24,7 +24,7 @@ audit:  # Configurations for auditing
       generator:
         module_path: "./utils/CTGAN_extended.py"
         model_class: "CustomCTGAN"
-        #checkpoint_path: "ctgan.pkl"
+        checkpoint_path: "ctgan_backup.pkl"
         init_params:
           embedding_dim: *dim_z
           verbose: True
@@ -56,7 +56,7 @@ target:
   model_class: "TabularWrapper"
   model_type: "pytorch_tabular"
   # Data paths
-  target_folder: "./target"
+  target_folder: "./target/target"
   data_path: "./data/private_df.pkl"
   public_data_path: "./data/public_df.pkl"
 
