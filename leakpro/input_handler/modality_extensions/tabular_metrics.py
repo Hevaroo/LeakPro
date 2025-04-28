@@ -1,7 +1,12 @@
 """TabularMetrics class for computing tabular metrics."""
-
-#import numpy as np
+import gower
+import pandas as pd
 import torch
+from sdmetrics.reports.single_table import QualityReport
+from sdmetrics.single_column import KSComplement
+from sdmetrics.single_table import GMLogLikelihood
+from sdv.evaluation.single_table import get_column_plot
+from sdv.metadata import SingleTableMetadata
 
 from leakpro.attacks.utils.generator_handler import GeneratorHandler
 from leakpro.input_handler.minv_handler import MINVHandler
@@ -29,13 +34,43 @@ class TabularMetrics:
         self._configure_metrics(configs)
         self.test_dict = {
             "accuracy": self.compute_accuracy,
+            "quality_metrics": self.quality_metrics,
+            "plot_densities": self.get_numerical_density_plots,
+            "plot_categorical_densities": self.get_categorical_density_plots,
+            "gm_likelihood": self.gm_likelihood,
         }
         logger.info(configs)
         self.results = {}
+        self.numerical_plots = {}
+        self.categorical_plots = {}
         # TODO: This loading functionality should not be in generator_handler
         self.private_dataloader = self.handler.get_private_dataloader(self.batch_size)
         # Compute desired metrics from configs
+        # TODO: Change table_name)
+        self.metadata = SingleTableMetadata()
+        self.metadata.detect_from_dataframe(data=self.private_dataloader.dataset)
+        # Get columns that are numerical in metadata
+        self.numerical_columns = self.metadata.get_column_names(sdtype="numerical")
+        self.best_rows = pd.DataFrame()
         self.metric_scheduler()
+
+    def compute_gower_dist(self, row, df, n=5) -> tuple:
+        """Compute the Gower distance for a given row and dataframe.
+
+        Args:
+        ----
+            row (pd.Series): The row to compute the distance for.
+            df (pd.DataFrame): The dataframe to compute the distance against.
+            n (int): The number of nearest neighbors to consider.
+
+        Returns:
+        -------
+            pd.Series: The Gower distances for the given row.
+
+        """
+        row_df = pd.DataFrame(row).T
+        arr = gower.gower_topn(row_df, df, n=n)
+        return arr["index"], arr["values"]
 
     def _configure_metrics(self, configs: dict) -> None:
         """Configure the metrics parameters.
@@ -50,6 +85,7 @@ class TabularMetrics:
         self.num_class_samples = configs.num_class_samples
         self.num_audited_classes = configs.num_audited_classes
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
     def metric_scheduler(self) -> None:
         """Schedule the metrics to be computed."""
@@ -80,18 +116,27 @@ class TabularMetrics:
         correct_predictions = []
         for label_i, z_i in zip(self.labels, self.z):
             # generate samples for each pair of label and z
-            generated_samples, _, _ = self.generator_handler.sample_from_generator(batch_size=self.num_class_samples + 1, # TODO: Move to configs asserts, num_class_samples ge 2
+            generated_samples, _, _ = self.generator_handler.sample_from_generator(batch_size=self.num_class_samples+1, # TODO: Move to configs asserts, num_class_samples ge 2
                                                                             label=label_i,
                                                                             z=z_i)
 
-            print(generated_samples)
+            # current_df = self.private_dataloader.dataset.query(f"identity == {label_i}")
+            # current_df.rename(columns = {"identity": "pseudo_label"}, inplace = True)  # noqa: PD002
 
+            # # Apply the function row by row
+            # # Apply the function row by row
+            # generated_samples["gower_dist"] = generated_samples.apply(
+            #     lambda row: self.compute_gower_dist(row, current_df, 1), axis=1
+            # )
+            # print(generated_samples["gower_dist"])
+            # best_row = generated_samples["gower_dist"]
+
+            synthetic_label = generated_samples["pseudo_label"].values
+            synthetic_label = torch.tensor(synthetic_label, dtype=torch.int).to(self.device)
             generated_samples = generated_samples.drop(columns=["pseudo_label"])
             output = self.evaluation_model(generated_samples)
             prediction = torch.argmax(output, dim=1)
-            print(label_i)
-            print(prediction)
-            correct_predictions.append(prediction == label_i)
+            correct_predictions.append(prediction == synthetic_label)
 
         correct_predictions = torch.cat(correct_predictions).float()
         self.accuracy = correct_predictions.mean()
@@ -100,3 +145,89 @@ class TabularMetrics:
 
         self.results["accuracy"] = self.accuracy.item()
         self.results["accuracy_std"] = self.accuracy_std.item()
+
+
+    def quality_metrics(self) -> None:
+        """Compute quality metrics for the generated samples.
+
+        We generate random samples. In this function, we do not pass the labels and z to the generator.
+        """
+        logger.info("Computing quality metrics for generated samples.")
+        self.evaluation_model.eval()
+        self.evaluation_model.to(self.device)
+        self.generator.eval()
+        self.generator.to(self.device)
+
+        # Match the number of samples in the private dataloader
+        desired_num_samples = len(self.private_dataloader.dataset)
+        self.generated_samples = self.generator.sample(desired_num_samples)
+
+        # We need to change column "pseudo_label" to identity in generated samples to match synthethic and real data
+        self.generated_samples["identity"] = self.generated_samples["pseudo_label"]
+        self.generated_samples = self.generated_samples.drop(columns=["pseudo_label"])
+
+        # evaluate_quality(real_data = self.private_dataloader.dataset,
+        #                                   synthetic_data = self.generated_samples,
+        #                                   metadata = self.metadata, verbose=True)
+
+        report = QualityReport()
+        report.generate(
+            real_data=self.private_dataloader.dataset,
+            synthetic_data=self.generated_samples,
+            metadata=self.metadata.to_dict(),
+            verbose=True
+        )
+        self.results["quality_report"] = report
+        # logger.info("Computing KSComplement for numerical columns.")
+        # for col in self.numerical_columns:
+        #     # Get KSComplement for each column
+        #     ks_score = KSComplement.compute(real_data=self.private_dataloader.dataset[col],
+        #                                     synthetic_data=self.generated_samples[col])
+
+        #     logger.info(f"KSComplement for {col}: {ks_score}")
+
+    def get_numerical_density_plots(self) -> None:
+        """Plot the densities of the numerical columns.
+
+        We run this function after quality_metrics.
+        """
+
+        if self.numerical_columns is None:
+            logger.warning("No numerical columns found in the metadata.")
+            return
+        for col in self.numerical_columns:
+            if col == "identity":
+                continue
+            self.numerical_plots[f"{col}_density_plot"] = get_column_plot(
+                real_data=self.private_dataloader.dataset,
+                synthetic_data=self.generated_samples,
+                column_name=col,
+                metadata=self.metadata
+            )
+
+    def get_categorical_density_plots(self) -> None:
+        """Plot the densities of the categorical columns.
+
+        We run this function after quality_metrics.
+        """
+        categorical_columns = ["identity", "race", "insurance", "gender"]
+        for col in categorical_columns:
+            self.categorical_plots[f"{col}_bar_plot"] = get_column_plot(
+                real_data=self.private_dataloader.dataset,
+                synthetic_data=self.generated_samples,
+                column_name=col,
+                metadata=self.metadata,
+                plot_type="bar"
+            )
+
+    def gm_likelihood(self) -> None:
+        """Compute the likelihood of the generated samples using the Gaussian Mixture Model (GMM).
+
+        We run this function after quality_metrics.
+        """
+        real_data = self.private_dataloader.dataset[self.numerical_columns].drop(columns=["identity"])
+        synthetic_data = self.generated_samples[self.numerical_columns].drop(columns=["identity"])
+        self.results["gm_likelihood"] = GMLogLikelihood.compute(
+            real_data=real_data,
+            synthetic_data=synthetic_data,
+        )

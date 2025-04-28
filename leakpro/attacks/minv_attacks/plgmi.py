@@ -132,7 +132,6 @@ class AttackPLGMI(AbstractMINV):
         self.target_model.to(self.device)
         all_confidences = []
         self.target_model.to(self.device)
-        print(self.top_n)
 
         # TODO: Maybe this is handler/modality functions
         if self.data_format == "dataloader":
@@ -146,7 +145,6 @@ class AttackPLGMI(AbstractMINV):
         elif self.data_format == "dataframe":
             # Remove "identity" column from dataset
             public_data = self.public_dataloader.dataset.drop(columns=["identity"])
-
             with torch.no_grad():
                 outputs = self.target_model(public_data)
                 confidences = F.softmax(outputs, dim=1)
@@ -197,7 +195,7 @@ class AttackPLGMI(AbstractMINV):
             else:
                 pseudo_data = pd.DataFrame(pseudo_data)
 
-            print(pseudo_data["pseudo_label"].unique())
+            logger.info(f"Number of unique classes in pseudo data: {pseudo_data['pseudo_label'].nunique()}")
         logger.info("Created pseudo dataloader")
 
         # pseudo_data is now a list of tuples (entry, pseudo_label)
@@ -253,7 +251,7 @@ class AttackPLGMI(AbstractMINV):
                                     dis = self.discriminator,
                                     gen_criterion = gan_losses.GenLoss(loss_type="hinge", is_relativistic=False),
                                     dis_criterion = gan_losses.DisLoss(loss_type="hinge", is_relativistic=False),
-                                    inv_criterion = gan_losses.max_margin_loss,
+                                    inv_criterion = gan_losses.max_margin_loss, # TODO: WAS MAX_MARGIN, CHANGE BACK
                                     target_model = self.target_model,
                                     opt_gen = self.gen_optimizer,
                                     opt_dis = self.dis_optimizer,
@@ -269,7 +267,8 @@ class AttackPLGMI(AbstractMINV):
         else:
             logger.info("GAN already trained, skipping training")
 
-        # Save the trained generator
+        # Save the trained generator loss values
+        self.generator.loss_values.to_pickle("GAN_losses.pkl")
 
 
     def run_attack(self:Self) -> MinvResult:
@@ -323,9 +322,8 @@ class AttackPLGMI(AbstractMINV):
                                         reconstruction_configs,
                                         labels=labels,
                                         z=opt_z)
-        logger.info(metrics.results)
 
-        return metrics.results
+        return metrics
 
     def optimize_z_grad(self:Self,
                    y: torch.tensor,
@@ -373,13 +371,14 @@ class AttackPLGMI(AbstractMINV):
 
         optimizer = torch.optim.Adam([z], lr=self.configs.z_optimization_lr)
 
+        min_loss = 1e6
         for i in range(iter_times):
             # Generate fake images
             fake = self.generator(z, y)
 
             if self.handler.configs.target.model_type == "pytorch_tabular":
-                y = fake["pseudo_label"].values
-                y = torch.tensor(y, dtype=torch.long).to(self.device)
+                #y = fake["pseudo_label"].values
+                #y = torch.tensor(y, dtype=torch.long).to(self.device)
                 fake = fake.drop(columns=["pseudo_label"])
 
             out1 = self.target_model(aug_list(fake))
@@ -387,6 +386,11 @@ class AttackPLGMI(AbstractMINV):
             # compute the loss
 
             inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
+
+            if inv_loss < min_loss:
+                min_loss = inv_loss
+                # Save the best z
+                best_z = z.clone()
 
             if z.grad is not None:
                 z.grad.data.zero_()
@@ -406,7 +410,7 @@ class AttackPLGMI(AbstractMINV):
                     acc = y.eq(eval_iden.long()).sum().item() * 1.0 / bs
                     logger.info("Iteration:{}\tInv Loss:{:.2f}\tAttack Acc:{:.2f}".format(i + 1, inv_loss_val, acc))
 
-        return z
+        return best_z
 
     def optimize_z_no_grad(self, y: torch.tensor, iter_times: int = 10) -> torch.tensor:
         """Find the optimal latent vectors z for labels y.

@@ -40,4 +40,5 @@ class TabularWrapper(TabularModel):
         pass
     
     def eval(self):
+        self.model.eval()
         pass

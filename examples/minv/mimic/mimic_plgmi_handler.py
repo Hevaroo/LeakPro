@@ -152,7 +152,7 @@ class Mimic_InputHandler(AbstractInputHandler):
         # ctgan takes dataframe or numpy array as input
         ctgan.fit(train_data= pseudo_loader.dataset, 
                     target_model=target_model,
-                    num_classes=705,
+                    num_classes=705, # TODO: Fix this, currently doesnt do anything
                     inv_criterion=inv_criterion,
                     gen_criterion=gen_criterion,
                     dis_criterion=dis_criterion,
@@ -162,7 +162,7 @@ class Mimic_InputHandler(AbstractInputHandler):
                     n_iter=n_iter,
                     n_dis=n_dis)
         #gen.fit(train_data = pseudo_loader.dataset, discrete_columns = discrete_columns)
-        ctgan.save("ctgan_fit2.pkl")
+        ctgan.save("ctgan.pkl")
     
         
     

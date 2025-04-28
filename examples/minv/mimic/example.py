@@ -31,7 +31,6 @@ num_classes = audit_config["audit"]["attack_list"]["plgmi"]["num_classes"]
 path = os.path.join(os.getcwd(), train_config["data"]["data_dir"])
 data_dir =  train_config["data"]["data_dir"] + "/private_df.pkl"
 
-
 df = pd.read_pickle(data_dir)
 
 # Reset index to have a clean, sequential integer index
@@ -56,17 +55,19 @@ df_val = df.drop(train_indices)
 df_val = df_val[df_val["identity"].isin(df_train["identity"])]
 df_val = df_val.reset_index(drop=True)
 
-
-print(df_train)
-
 #print number of unique classes in df_train
 print("Number of unique classes in df_train: ", df_train["identity"].nunique())
 
+
+# Print shape of df_train, df_val
+print("Shape of df_train: ", df_train.shape)
+print("Shape of df_val: ", df_val.shape)
+
+# Print the categories in identity
 train = False
 if train:
     # Continous column names
-    continuous_col_names = ['length_of_stay', 'num_procedures', 'num_medications', 'BMI',
-       'BMI (kg/m2)', 'Height (Inches)', 'Weight', 'Weight (Lbs)']
+    continuous_col_names = ['length_of_stay', 'num_procedures', 'num_medications', 'Height (Inches)','Weight (Lbs)', 'BMI (kg/m2)']
     # Categorical column names, the rest are categorical
     categorical_col_names = [col for col in df.columns if col not in continuous_col_names]
     # Remove the target column
@@ -77,7 +78,7 @@ if train:
         continuous_cols=continuous_col_names,
         categorical_cols=categorical_col_names,
         #continuous_feature_transform="quantile_normal",
-        normalize_continuous_features=True,
+        normalize_continuous_features=False,
     )
 
     trainer_config = TrainerConfig(
