@@ -24,7 +24,7 @@ audit:  # Configurations for auditing
       generator:
         module_path: "./utils/CTGAN_extended.py"
         model_class: "CustomCTGAN"
-        checkpoint_path: "ctgan_backup.pkl"
+        #checkpoint_path: "ctgan_backup.pkl"
         init_params:
           embedding_dim: *dim_z
           verbose: True
