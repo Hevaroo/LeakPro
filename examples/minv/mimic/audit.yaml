@@ -24,7 +24,7 @@ audit:  # Configurations for auditing
       generator:
         module_path: "./utils/CTGAN_extended.py"
         model_class: "CustomCTGAN"
-        #checkpoint_path: "ctgan_backup.pkl"
+        #checkpoint_path: "ctgan.pkl"
         init_params:
           embedding_dim: *dim_z
           verbose: True
@@ -47,7 +47,7 @@ audit:  # Configurations for auditing
       plot_categorical_densities:
 
   output_dir: "./leakpro_output"
-  attack_type: "minv" #mia, gia
+  attack_type: "minv" #mia, gia, minv
   #data_modality: "tabular" #image, tabular
 
 target:

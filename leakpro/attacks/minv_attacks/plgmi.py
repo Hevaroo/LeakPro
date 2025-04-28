@@ -315,8 +315,8 @@ class AttackPLGMI(AbstractMINV):
                 opt_z = self.optimize_z_no_grad(y=labels,
                                 iter_times=self.configs.z_optimization_iter)
             elif self.handler.configs.target.model_type == "pytorch_tabular":
-                opt_z, labels = self.optimize_z_grad_tabular(y=labels,
-                                iter_times=self.configs.z_optimization_iter)
+                opt_z = self.optimize_z_grad(y=labels,
+                                iter_times=self.configs.z_optimization_iter, augment=False)
 
             metrics = TabularMetrics(self.handler, self.gan_handler,
                                         reconstruction_configs,
