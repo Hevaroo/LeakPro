@@ -139,8 +139,12 @@ class CelebA_InputHandler(AbstractInputHandler):
             kornia.augmentation.RandomHorizontalFlip(),
             kornia.augmentation.RandomRotation(5),
         ).to(device)
+        
+        gen.load_state_dict(torch.load('./checks/gen_checkpoint_20000.pth'))
+        dis.load_state_dict(torch.load('./checks/dis_checkpoint_20000.pth'))
 
         target_model.to(device)
+        target_model.eval()
         gen.to(device)
         dis.to(device)
         # Training loop

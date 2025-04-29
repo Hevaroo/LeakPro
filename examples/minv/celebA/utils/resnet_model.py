@@ -53,9 +53,24 @@ class VGG16(BaseCNN):
     def __init__(self, num_classes):
         super().__init__(num_classes)
         self.model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
-        # In VGG16, the classifier is a Sequential model.
-        # Replace the last layer (typically at index 6) to match the desired number of classes.
-        self.model.classifier[6] = nn.Linear(self.model.classifier[6].in_features, num_classes)
+        
+        
+        self.model.features = nn.Sequential(*list(self.model.features.children())[:-5])
+
+
+        # New AdaptiveAvgPool so that output is always 2x2
+        self.model.avgpool = nn.AdaptiveAvgPool2d((2, 2))
+
+        # New classifier head
+        self.model.classifier = nn.Sequential(
+            nn.Linear(512 * 2 * 2, 4096),  # 512 filters, 2x2 feature map
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(4096, num_classes),
+        )
 
 
 def evaluate(model, loader, criterion, device):
