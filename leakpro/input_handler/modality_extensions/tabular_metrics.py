@@ -1,5 +1,6 @@
 """TabularMetrics class for computing tabular metrics."""
 import gower
+import numpy as np
 import pandas as pd
 import torch
 from sdmetrics.reports.single_table import QualityReport
@@ -38,13 +39,15 @@ class TabularMetrics:
             "plot_densities": self.get_numerical_density_plots,
             "plot_categorical_densities": self.get_categorical_density_plots,
             "gm_likelihood": self.gm_likelihood,
+            "gower_dist": self.gower_dist,
         }
         logger.info(configs)
         self.results = {}
         self.numerical_plots = {}
         self.categorical_plots = {}
-        # TODO: This loading functionality should not be in generator_handler
+
         self.private_dataloader = self.handler.get_private_dataloader(self.batch_size)
+        self.generated_samples = None
         # Compute desired metrics from configs
         # TODO: Change table_name)
         self.metadata = SingleTableMetadata()
@@ -119,17 +122,6 @@ class TabularMetrics:
             generated_samples, _, _ = self.generator_handler.sample_from_generator(batch_size=self.num_class_samples+1, # TODO: Move to configs asserts, num_class_samples ge 2
                                                                             label=label_i,
                                                                             z=z_i)
-
-            # current_df = self.private_dataloader.dataset.query(f"identity == {label_i}")
-            # current_df.rename(columns = {"identity": "pseudo_label"}, inplace = True)  # noqa: PD002
-
-            # # Apply the function row by row
-            # # Apply the function row by row
-            # generated_samples["gower_dist"] = generated_samples.apply(
-            #     lambda row: self.compute_gower_dist(row, current_df, 1), axis=1
-            # )
-            # print(generated_samples["gower_dist"])
-            # best_row = generated_samples["gower_dist"]
 
             synthetic_label = generated_samples["pseudo_label"].values
             synthetic_label = torch.tensor(synthetic_label, dtype=torch.int).to(self.device)
@@ -231,3 +223,49 @@ class TabularMetrics:
             real_data=real_data,
             synthetic_data=synthetic_data,
         )
+
+    def gower_dist(self) -> None:
+        """Compute the Gower distance and find best matches between synthethic and real data."""
+
+        if self.generated_samples is None:
+            # Match the number of samples in the private dataloader
+            desired_num_samples = len(self.private_dataloader.dataset)
+            self.generated_samples = self.generator.sample(desired_num_samples)
+
+        table_synthethic = self.generated_samples
+        table_real = self.private_dataloader.dataset
+
+        # For each unique value in 'identity' column
+        unique_values = table_real["identity"].unique()
+
+        for value in unique_values:
+            print(f"Finding best row for identity: {value}")
+            # Filter the table for the current value
+            syn_subset = table_synthethic[table_synthethic["pseudo_label"] == value].copy()
+            real_subset = table_real[table_real["identity"] == value].copy()
+            offset = len(syn_subset)
+
+            # Concat the two tables
+            table = pd.concat([syn_subset, real_subset], axis=0)
+
+            # Compute the Gower distance
+            gower_distance = gower.gower_matrix(table)
+
+            gower_distance = gower_distance[:offset, offset:]
+
+            min_index = np.unravel_index(np.argmin(gower_distance, axis=None), gower_distance.shape)
+
+            # Get the corresponding synthetic and real rows
+            synthetic_row = syn_subset.iloc[min_index[0]]
+            real_row = real_subset.iloc[min_index[1]]
+
+            synthetic_row = pd.DataFrame(synthetic_row).T
+            real_row = pd.DataFrame(real_row).T
+
+            # Cat synthetic and real rows to best_rows dataframe
+            self.best_rows = pd.concat([self.best_rows, synthetic_row, real_row], axis=0)
+            self.best_rows = self.best_rows.reset_index(drop=True)
+
+
+
+
