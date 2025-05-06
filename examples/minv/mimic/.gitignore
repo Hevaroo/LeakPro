@@ -8,3 +8,5 @@ saved_models/*
 .pt_tmp/*
 *.pkl
 iframe_figures/*
+*.csv
+audit_*.yaml
