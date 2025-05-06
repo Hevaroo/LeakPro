@@ -270,6 +270,15 @@ class TabularMetrics:
             self.best_rows = pd.concat([self.best_rows, synthetic_row, real_row], axis=0)
             self.best_rows = self.best_rows.reset_index(drop=True)
 
+    def save(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+        """Placeholder function to save the metrics to disk.
+
+        Args:
+            *args: Positional arguments.
+            **kwargs: Keyword arguments.
+
+        """
+        pass
 
 
 
