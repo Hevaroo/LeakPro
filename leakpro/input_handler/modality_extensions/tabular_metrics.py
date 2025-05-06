@@ -28,11 +28,14 @@ class TabularMetrics:
         self.generator_handler = generator_handler
         self.generator = self.generator_handler.get_generator()
         self.target_model = self.handler.target_model
-        self.load_evaluation_model()
+
         self.labels = labels
         self.z = z
         logger.info("Configuring TabularMetrics")
         self._configure_metrics(configs)
+
+        self.load_evaluation_model()
+
         self.test_dict = {
             "accuracy": self.compute_accuracy,
             "quality_metrics": self.quality_metrics,
@@ -61,8 +64,6 @@ class TabularMetrics:
     def load_evaluation_model(self) -> None:
         """Load the evaluation model."""
         model_class = self.configs.eval_model.model_class
-        model_type = self.configs.eval_model.model_type
-
         if model_class is None:
             raise ValueError("model_class not found in configs.")
 
@@ -81,14 +82,11 @@ class TabularMetrics:
         model_path = self.configs.eval_model.eval_folder
 
         """Get the trained eval model."""
-        if model_type == "pytorch_tabular":
-            try:
-                self.target_model = self.eval_model_blueprint.load_model(model_path)
-                logger.info(f"Loaded eval model from {model_path}")
-            except FileNotFoundError as e:
-                raise FileNotFoundError(f"Could not find the trained eval model at {model_path}") from e
-        else:
-            raise ValueError(f"Model type {model_type} not supported. Supported types are: pytorch_tabular.")
+        try:
+            self.evaluation_model = self.eval_model_blueprint.load_model(model_path)
+            logger.info(f"Loaded eval model from {model_path}")
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"Could not find the trained eval model at {model_path}") from e
 
     def _configure_metrics(self, configs: dict) -> None:
         """Configure the metrics parameters.

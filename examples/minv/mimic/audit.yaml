@@ -43,7 +43,6 @@ audit:  # Configurations for auditing
     eval_model:
       module_path: "./utils/tabular_wrapper.py"
       model_class: "TabularWrapper"
-      model_type: "pytorch_tabular"
       # Data paths
       eval_folder: "./target"
     metrics:
