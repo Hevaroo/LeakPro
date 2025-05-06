@@ -3,7 +3,7 @@ audit:  # Configurations for auditing
   random_seed: 1234  # Integer specifying the random seed
   data_modality: "image" #image, tabular
   attack_list:
-    plgmi:
+    - attack: plgmi
       top_n: 100 # Integer number indicating how many pseudo-labels to select
       n_dis: 5 # Integer number for indicating the number of discriminator updates per generator update
       n_iter: 2500 # Integer number for indicating the iterations for training the GAN
