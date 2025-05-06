@@ -17,7 +17,7 @@ from leakpro.attacks.utils.gan_handler import GANHandler
 from leakpro.input_handler.minv_handler import MINVHandler
 from leakpro.input_handler.modality_extensions.image_metrics import ImageMetrics
 from leakpro.input_handler.modality_extensions.tabular_metrics import TabularMetrics
-from leakpro.metrics.attack_result import MinvResult
+from leakpro.reporting.minva_result import MinvResult
 from leakpro.utils.import_helper import Self
 from leakpro.utils.logger import logger
 
@@ -44,6 +44,7 @@ class AttackPLGMI(AbstractMINV):
         top_n : int = Field(10, ge=1, description="Number of pseudo-labels to select")
         alpha: float = Field(0.1, ge=0.0, description="Regularization parameter for inversion optimization")
         n_iter: int = Field(1000, ge=1, description="Number of iterations for optimization")
+        checkpoint_interval: int = Field(10000, ge=1, description="Checkpoint interval for saving models")
         log_interval: int = Field(10, ge=1, description="Log interval")
 
         # Generator parameters
@@ -84,6 +85,7 @@ class AttackPLGMI(AbstractMINV):
         """
         logger.info("Configuring PLG-MI attack")
         self.configs = self.Config() if configs is None else self.Config(**configs)
+        self.attack_id = 1 # Workaround for now - required by attack scheduler
 
         # Call the parent class constructor
         super().__init__(handler)

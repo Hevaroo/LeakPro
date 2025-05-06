@@ -1,3 +1,4 @@
+import os
 import torch
 from torch import cuda, device, optim
 from torch.nn import CrossEntropyLoss
@@ -7,6 +8,7 @@ from leakpro import AbstractInputHandler
 from leakpro.schemas import TrainingOutput
 import kornia
 import time
+
 
 class CelebA_InputHandler(AbstractInputHandler):
     """Class to handle the user input for the CelebA dataset for plgmi attack."""
@@ -100,6 +102,7 @@ class CelebA_InputHandler(AbstractInputHandler):
                     opt_gen: optim.Optimizer,
                     opt_dis: optim.Optimizer,
                     n_iter: int,
+                    checkpoint_interval: int,
                     n_dis: int,
                     device: torch.device,
                     alpha: float,
@@ -210,9 +213,13 @@ class CelebA_InputHandler(AbstractInputHandler):
                             i, n_iter, _l_g, cumulative_loss_dis / n_dis, cumulative_inv_loss,
                             cumulative_target_acc / n_dis, time.strftime("%H:%M:%S")))
                 
-            if i % 3000 == 0 and i > 0:
-                torch.save(gen.state_dict(), f'./gen_{i}.pth')
-                torch.save(dis.state_dict(), f'./dis_{i}.pth')
+            if i % checkpoint_interval == 0 and i > 0:
+                # Save the model every checkpoint_interval iterations
                 
+                if not os.path.exists('./gan_checks'):
+                    os.makedirs('./gan_checks')
+                torch.save(gen.state_dict(), f'./gan_checks/gen_checkpoint_{i}.pth')
+                torch.save(dis.state_dict(), f'./gan_checks/dis_checkpoint_{i}.pth')
+
         torch.save(gen.state_dict(), './gen.pth')
         torch.save(dis.state_dict(), './dis.pth')
