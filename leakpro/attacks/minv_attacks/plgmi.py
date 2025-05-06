@@ -251,7 +251,7 @@ class AttackPLGMI(AbstractMINV):
                                     dis = self.discriminator,
                                     gen_criterion = gan_losses.GenLoss(loss_type="hinge", is_relativistic=False),
                                     dis_criterion = gan_losses.DisLoss(loss_type="hinge", is_relativistic=False),
-                                    inv_criterion = gan_losses.max_margin_loss, # TODO: WAS MAX_MARGIN, CHANGE BACK
+                                    inv_criterion = gan_losses.max_margin_loss,
                                     target_model = self.target_model,
                                     opt_gen = self.gen_optimizer,
                                     opt_dis = self.dis_optimizer,
@@ -281,8 +281,24 @@ class AttackPLGMI(AbstractMINV):
 
         num_audited_classes = reconstruction_configs.num_audited_classes
 
-        # Get random labels
-        labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
+        # Number of unique categories seen by the generator during training
+        # If the pseudo_labeling did not find all classes, we get num_unique_categories < num_classes
+        num_unique_categories = (self.generator._data_sampler._n_categories
+                                 - self.generator._data_sampler._discrete_column_cond_st[-1])
+
+        if self.num_classes > num_unique_categories:
+            logger.info(
+                "Auditing %d classes out of %d classes instead,"
+                " due to partial class separation in psuedo-labeling step.",
+                num_unique_categories,
+                self.num_classes,
+            )
+            # Get random labels
+            labels = torch.randint(0, num_unique_categories, (num_audited_classes,)).to(self.device)
+        else:
+            # Get random labels
+            labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
+
         # Get range of labels from 0 to num_audited_classes
         #labels = torch.arange(num_audited_classes).to(self.device)
 
@@ -323,7 +339,6 @@ class AttackPLGMI(AbstractMINV):
                                         labels=labels,
                                         z=opt_z)
 
-        return metrics
         return metrics
 
     def optimize_z_grad(self:Self,
@@ -371,7 +386,6 @@ class AttackPLGMI(AbstractMINV):
         z.requires_grad = True
 
         optimizer = torch.optim.Adam([z], lr=self.configs.z_optimization_lr)
-
         min_loss = 1e6
         for i in range(iter_times):
             # Generate fake images

@@ -39,7 +39,7 @@ class TabularMetrics:
             "plot_densities": self.get_numerical_density_plots,
             "plot_categorical_densities": self.get_categorical_density_plots,
             "gm_likelihood": self.gm_likelihood,
-            "gower_dist": self.gower_dist,
+            "gower_distance": self.gower_dist,
         }
         logger.info(configs)
         self.results = {}
@@ -54,26 +54,9 @@ class TabularMetrics:
         self.metadata.detect_from_dataframe(data=self.private_dataloader.dataset)
         # Get columns that are numerical in metadata
         self.numerical_columns = self.metadata.get_column_names(sdtype="numerical")
+        self.categorical_columns = self.metadata.get_column_names(sdtype="categorical")
         self.best_rows = pd.DataFrame()
         self.metric_scheduler()
-
-    def compute_gower_dist(self, row, df, n=5) -> tuple:
-        """Compute the Gower distance for a given row and dataframe.
-
-        Args:
-        ----
-            row (pd.Series): The row to compute the distance for.
-            df (pd.DataFrame): The dataframe to compute the distance against.
-            n (int): The number of nearest neighbors to consider.
-
-        Returns:
-        -------
-            pd.Series: The Gower distances for the given row.
-
-        """
-        row_df = pd.DataFrame(row).T
-        arr = gower.gower_topn(row_df, df, n=n)
-        return arr["index"], arr["values"]
 
     def _configure_metrics(self, configs: dict) -> None:
         """Configure the metrics parameters.
@@ -144,7 +127,6 @@ class TabularMetrics:
 
         We generate random samples. In this function, we do not pass the labels and z to the generator.
         """
-        logger.info("Computing quality metrics for generated samples.")
         self.evaluation_model.eval()
         self.evaluation_model.to(self.device)
         self.generator.eval()
@@ -158,10 +140,7 @@ class TabularMetrics:
         self.generated_samples["identity"] = self.generated_samples["pseudo_label"]
         self.generated_samples = self.generated_samples.drop(columns=["pseudo_label"])
 
-        # evaluate_quality(real_data = self.private_dataloader.dataset,
-        #                                   synthetic_data = self.generated_samples,
-        #                                   metadata = self.metadata, verbose=True)
-
+        logger.info("Computing quality metrics for generated samples.")
         report = QualityReport()
         report.generate(
             real_data=self.private_dataloader.dataset,
@@ -170,13 +149,7 @@ class TabularMetrics:
             verbose=True
         )
         self.results["quality_report"] = report
-        # logger.info("Computing KSComplement for numerical columns.")
-        # for col in self.numerical_columns:
-        #     # Get KSComplement for each column
-        #     ks_score = KSComplement.compute(real_data=self.private_dataloader.dataset[col],
-        #                                     synthetic_data=self.generated_samples[col])
 
-        #     logger.info(f"KSComplement for {col}: {ks_score}")
 
     def get_numerical_density_plots(self) -> None:
         """Plot the densities of the numerical columns.
@@ -202,6 +175,7 @@ class TabularMetrics:
 
         We run this function after quality_metrics.
         """
+        # categorical_columns = self.categorical_columns
         categorical_columns = ["identity", "race", "insurance", "gender"]
         for col in categorical_columns:
             self.categorical_plots[f"{col}_bar_plot"] = get_column_plot(
@@ -239,7 +213,7 @@ class TabularMetrics:
         unique_values = table_real["identity"].unique()
 
         for value in unique_values:
-            print(f"Finding best row for identity: {value}")
+            logger.info(f"Finding best row for identity: {value}")
             # Filter the table for the current value
             syn_subset = table_synthethic[table_synthethic["pseudo_label"] == value].copy()
             real_subset = table_real[table_real["identity"] == value].copy()

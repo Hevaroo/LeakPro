@@ -26,7 +26,8 @@ class CustomCTGAN(CTGAN):
                  log_frequency=True, 
                  verbose=False, 
                  epochs=300, 
-                 pac=10, 
+                 pac=10,
+                 only_pseudo_label_conditioning=True, 
                  cuda=True):
         
         self.dim_z = embedding_dim
@@ -38,7 +39,7 @@ class CustomCTGAN(CTGAN):
         
         self._transformer = DataTransformer()
 
-        self.metadata = None
+        self.only_psuedo_label_conditioning = only_pseudo_label_conditioning
         
     def to(self, device):
         self._device = device
@@ -68,17 +69,15 @@ class CustomCTGAN(CTGAN):
         """
         if self._transformer is None:
             raise ValueError("The transformer has not been initialized. Please call the `fit` method first.")
-
-        condition_column = "pseudo_label"
     
         if y is not None:
+            # TODO: If desired, support for conditioning on other discrete 
+            # columns than pseudo-labels can be implemented here for correct sampling.
+
             # Batch size is length of y
             bs = y.shape[0]
             condition_values = y.detach().cpu().numpy()
         
-            # TODO: Check this logic
-            #condition_values = condition_values[:1]
-
             discrete_column_id = np.array([self._data_sampler._n_discrete_columns-1]*bs)
             cond = np.zeros((bs, self._data_sampler._n_categories), dtype='float32')
             category_id = self._data_sampler._discrete_column_cond_st[discrete_column_id] + condition_values
@@ -157,7 +156,7 @@ class CustomCTGAN(CTGAN):
         '''    
         return samples
     
-    def sample_condvec(self, batch, only_pseudo_label_conditioning=True):
+    def sample_condvec(self, batch):
         """Generate the conditional vector for training. Supports conditioning on all discrete columns or only the pseudo label column.
         Args:
             batch (int):
@@ -176,7 +175,10 @@ class CustomCTGAN(CTGAN):
             category_id_in_col (batch):
                 Selected category in the selected discrete column.
         """
-        if only_pseudo_label_conditioning:
+        if self._data_sampler._n_discrete_columns == 0:
+            return None
+
+        if self.only_psuedo_label_conditioning:
             discrete_column_id = np.array([self._data_sampler._n_discrete_columns-1]*batch)
         else:
             discrete_column_id = np.random.choice(np.arange(self._data_sampler._n_discrete_columns), batch)

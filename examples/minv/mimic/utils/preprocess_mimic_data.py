@@ -114,7 +114,7 @@ def preprocess_data(input_path, lab_events_path, continuous_col_names, mean_impu
     return output_path
 
 
-def extract_features_and_split(processed_path, desried_num_unique_classes, print_classification_reports=True):
+def extract_features_and_split(processed_path, desried_num_unique_classes, desired_num_features, print_classification_reports=True):
     """
     Basic example function to extract features from the processed MIMIC dataset using Random Forest feature importance.
     This function loads the processed dataset, trains a Random Forest model, and extracts feature importances.
@@ -163,7 +163,7 @@ def extract_features_and_split(processed_path, desried_num_unique_classes, print
     max_unique_classes = df["identity"].nunique()
     print(f"Number of unique classes with more than 1000 samples: {max_unique_classes}")
     # Assert valid desired_num_unique_classes
-    assert desried_num_unique_classes <= max_unique_classes, f"Desired number of unique classes ({desried_num_unique_classes}) is greater than the maximum number of unique classes ({max_unique_classes})"
+    #assert desried_num_unique_classes <= max_unique_classes, f"Desired number of unique classes ({desried_num_unique_classes}) is greater than the maximum number of unique classes ({max_unique_classes})"
 
     # Split data: train/val split of 90/10, stratified split
     df_train, df_val = train_test_split(df, test_size=0.1, stratify=df['identity'], random_state=42)
@@ -198,8 +198,9 @@ def extract_features_and_split(processed_path, desried_num_unique_classes, print
     importances = rf_model.feature_importances_
     feature_importances = pd.DataFrame(importances, index=X_train.columns, columns=["importance"]).sort_values("importance", ascending=False)
 
-    # Filter feature importances to some threshold, TODO: Perhaps change to num_desired_features
-    feature_importances = feature_importances[feature_importances['importance'] > 5e-3]
+    # Filter feature importances to be first desired_num_features of features
+    feature_importances = feature_importances.head(desired_num_features)
+    #feature_importances = feature_importances[feature_importances['importance'] > 5e-3]
     # Print the number of features with non-zero importance
     print("Number of features selected: ", len(feature_importances))
 
@@ -227,11 +228,11 @@ def extract_features_and_split(processed_path, desried_num_unique_classes, print
     df_important_features["identity"] = df["identity"].astype('int64')
     df_copy_important_features["identity"] = df_copy["identity"].astype('int64')
 
-    df = df_important_features
+    #df = df_important_features
     df_copy = df_copy_important_features
 
     # Sort classes by their counts in descending order
-    class_counts = df['identity'].value_counts()
+    class_counts = df_copy['identity'].value_counts() #df
     most_common_classes = class_counts.index[:desried_num_unique_classes]
 
     # Create a mapping for the most common classes
@@ -242,10 +243,10 @@ def extract_features_and_split(processed_path, desried_num_unique_classes, print
     mapping_path = os.path.join(output_dir, "mapping.yaml")
     with open(mapping_path, 'w') as file:
         yaml.dump(mapping, file)
-    df['identity'] = df['identity'].map(mapping)
+    df_copy['identity'] = df_copy['identity'].map(mapping)
 
     # Select desired_num_unique_classes in private dataset
-    private_df = df[df['identity'] < desried_num_unique_classes].copy()
+    private_df = df_copy[df_copy['identity'] < desried_num_unique_classes].copy()
     private_df["identity"] = private_df["identity"].astype('int64')
 
     # The public dataset is the rest of the (ALL) data
@@ -270,8 +271,6 @@ def extract_features_and_split(processed_path, desried_num_unique_classes, print
     # Save the processed file in the same folder as processed_path
     private_output_path = os.path.join(output_dir, "private_df.pkl")
     public_output_path = os.path.join(output_dir, "public_df.pkl")
-
-
 
     public_df.to_pickle(public_output_path)
     private_df.to_pickle(private_output_path)
