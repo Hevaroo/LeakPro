@@ -1,5 +1,6 @@
 """Parent class for user inputs."""
 
+import inspect
 
 import joblib
 import pandas as pd
@@ -25,6 +26,7 @@ class MINVHandler:
         self._load_trained_target_model()
         self._load_public_data()
         self._load_private_data()
+
         self._load_criterion()
 
     def _load_public_data(self) -> None:
@@ -143,6 +145,10 @@ class MINVHandler:
 
     def _load_criterion(self:Self) -> None:
         """Get the criterion for the target model."""
+
+        if self.configs.target.model_type == "pytorch_tabular":
+            # If the model is pytorch_tabular, we don't need to load the criterion
+            return
 
         criterion_config = self.target_model_metadata.criterion
         if not isinstance(criterion_config, LossConfig):

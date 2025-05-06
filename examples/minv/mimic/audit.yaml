@@ -40,6 +40,11 @@ audit:  # Configurations for auditing
     batch_size: 4000 # Integer number for indicating batch size in reconstruction
     num_class_samples: 1000 # Number of samples to generate for each class
     num_audited_classes: 20 # Number of classes to audit
+    eval_model:
+      module_path: "./utils/tabular_wrapper.py"
+      model_class: "TabularWrapper"
+      # Data paths
+      eval_folder: "./target"
     metrics:
       #gower_distance:
       accuracy:

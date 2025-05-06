@@ -31,7 +31,7 @@ with open('audit.yaml', 'r') as file:
     audit_config = yaml.safe_load(file)
 
 
-num_classes = audit_config["audit"]["attack_list"]["plgmi"]["num_classes"]
+num_classes = audit_config["audit"]["attack_list"][0]["num_classes"]
 
 # Generate the dataset and dataloaders
 path = os.path.join(os.getcwd(), train_config["data"]["data_dir"])

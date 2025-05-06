@@ -4,13 +4,13 @@ import numpy as np
 import pandas as pd
 import torch
 from sdmetrics.reports.single_table import QualityReport
-from sdmetrics.single_column import KSComplement
 from sdmetrics.single_table import GMLogLikelihood
 from sdv.evaluation.single_table import get_column_plot
 from sdv.metadata import SingleTableMetadata
 
 from leakpro.attacks.utils.generator_handler import GeneratorHandler
 from leakpro.input_handler.minv_handler import MINVHandler
+from leakpro.input_handler.user_imports import get_class_from_module, import_module_from_file
 from leakpro.utils.logger import logger
 
 
@@ -27,12 +27,15 @@ class TabularMetrics:
         self.handler = handler
         self.generator_handler = generator_handler
         self.generator = self.generator_handler.get_generator()
-        self.evaluation_model = self.handler.target_model # TODO: Change to evaluation model from configs
         self.target_model = self.handler.target_model
+
         self.labels = labels
         self.z = z
         logger.info("Configuring TabularMetrics")
         self._configure_metrics(configs)
+
+        self.load_evaluation_model()
+
         self.test_dict = {
             "accuracy": self.compute_accuracy,
             "quality_metrics": self.quality_metrics,
@@ -57,6 +60,33 @@ class TabularMetrics:
         self.categorical_columns = self.metadata.get_column_names(sdtype="categorical")
         self.best_rows = pd.DataFrame()
         self.metric_scheduler()
+
+    def load_evaluation_model(self) -> None:
+        """Load the evaluation model."""
+        model_class = self.configs.eval_model.model_class
+        if model_class is None:
+            raise ValueError("model_class not found in configs.")
+
+        module_path=self.configs.eval_model.module_path
+        if module_path is None:
+            raise ValueError("module_path not found in configs.")
+
+        try:
+            eval_module = import_module_from_file(module_path)
+            self.eval_model_blueprint = get_class_from_module(eval_module, model_class)
+            logger.info(f"Eval model blueprint created from {model_class} in {module_path}.")
+        except Exception as e:
+            raise ValueError(f"Failed to create the eval model blueprint from {model_class} in {module_path}") from e
+
+        """Get the eval model metadata from the trained model metadata file."""
+        model_path = self.configs.eval_model.eval_folder
+
+        """Get the trained eval model."""
+        try:
+            self.evaluation_model = self.eval_model_blueprint.load_model(model_path)
+            logger.info(f"Loaded eval model from {model_path}")
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"Could not find the trained eval model at {model_path}") from e
 
     def _configure_metrics(self, configs: dict) -> None:
         """Configure the metrics parameters.
