@@ -139,7 +139,7 @@ class CustomCTGAN(CTGAN):
                     st = ed
                 elif span_info.activation_fn == 'softmax':
                     ed = st + span_info.dim
-                    transformed = F.log_softmax(data[:, st:ed])
+                    transformed = F.softmax(data[:, st:ed])
                     data_t.append(transformed)
                     st = ed
                 else:
@@ -148,6 +148,17 @@ class CustomCTGAN(CTGAN):
         return torch.cat(data_t, dim=1)
     
     def call2(self, z=None, y=None):
+        """
+        Sample activations from the generator (not transformed to df).
+        Args:
+            z (torch.Tensor):
+                The latent vector.
+            y (torch.Tensor):
+                The condition vector.
+        Returns:
+            fakeact (torch.Tensor):
+                The generated activations.
+        """
         if self._transformer is None:
             raise ValueError("The transformer has not been initialized. Please call the `fit` method first.")
     
