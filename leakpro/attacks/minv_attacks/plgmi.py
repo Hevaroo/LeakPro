@@ -461,7 +461,8 @@ class AttackPLGMI(AbstractMINV):
 
             if (i + 1) % self.log_interval == 0:
                 with torch.no_grad():
-                    eval_prob = self.evaluation_model.call2(wrapper)
+                    fake = self.generator(z, y)
+                    eval_prob = self.evaluation_model(fake)
                     eval_iden = torch.argmax(eval_prob, dim=1).view(-1)
                     acc = y.eq(eval_iden.long()).sum().item() * 1.0 / bs
                     logger.info("Iteration:{}\tInv Loss:{:.2f}\tAttack Acc:{:.2f}".format(i + 1, inv_loss_val, acc))
