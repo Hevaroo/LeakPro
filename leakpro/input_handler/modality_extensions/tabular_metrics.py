@@ -129,25 +129,39 @@ class TabularMetrics:
         self.evaluation_model.to(self.device)
         self.generator.eval()
         self.generator.to(self.device)
-        correct_predictions = []
-        for label_i, z_i in zip(self.labels, self.z):
-            # generate samples for each pair of label and z
-            generated_samples, _, _ = self.generator_handler.sample_from_generator(batch_size=self.num_class_samples+1, # TODO: Move to configs asserts, num_class_samples ge 2
-                                                                            label=label_i,
-                                                                            z=z_i)
 
-            synthetic_label = generated_samples["pseudo_label"].values
-            synthetic_label = torch.tensor(synthetic_label, dtype=torch.int).to(self.device)
-            generated_samples = generated_samples.drop(columns=["pseudo_label"])
-            output = self.evaluation_model(generated_samples)
-            prediction = torch.argmax(output, dim=1)
-            correct_predictions.append(prediction == synthetic_label)
+        # TODO: Perhaps define a config above to account for all potential optional parameters
+        try:
+            num_runs = self.configs.metrics["accuracy"].get("num_runs")
+        except AttributeError:
+            num_runs = 1
+        logger.info(f"Number of runs for accuracy: {num_runs}")
 
-        correct_predictions = torch.cat(correct_predictions).float()
-        self.accuracy = correct_predictions.mean()
-        self.accuracy_std = correct_predictions.std() / torch.sqrt(torch.tensor(len(correct_predictions), dtype=torch.float))
-        logger.info(f"Accuracy: {self.accuracy.item()}")
+        accuracies = []
+        for i in range(num_runs):
+            correct_predictions = []
+            logger.info(f"Run {i+1}/{num_runs} for accuracy.")
+            for label_i, z_i in zip(self.labels, self.z):
+                # generate samples for each pair of label and z
+                generated_samples, _, _ = self.generator_handler.sample_from_generator(batch_size=self.num_class_samples+1, # TODO: Move to configs asserts, num_class_samples ge 2
+                                                                                label=label_i,
+                                                                                z=z_i)
+                synthetic_label = generated_samples["pseudo_label"].values
+                synthetic_label = torch.tensor(synthetic_label, dtype=torch.int).to(self.device)
+                generated_samples = generated_samples.drop(columns=["pseudo_label"])
+                output = self.evaluation_model(generated_samples)
+                prediction = torch.argmax(output, dim=1)
+                correct_predictions.append(prediction == synthetic_label)
 
+            correct_predictions = torch.cat(correct_predictions).float()
+            accuracies.append(correct_predictions.mean())
+
+        # Compute the mean and std of the accuracies
+        self.accuracy = torch.mean(torch.tensor(accuracies))
+        self.accuracy_std = torch.std(torch.tensor(accuracies))
+
+        logger.info(f"Mean accuracy: {self.accuracy.item()}")
+        logger.info(f"Standard deviation: {self.accuracy_std.item()}")
         self.results["accuracy"] = self.accuracy.item()
         self.results["accuracy_std"] = self.accuracy_std.item()
 
@@ -206,6 +220,7 @@ class TabularMetrics:
         We run this function after quality_metrics.
         """
         # categorical_columns = self.categorical_columns
+        # TODO: Make categorical columns to be all columns that are not numerical
         categorical_columns = ["identity", "race", "insurance", "gender"]
         for col in categorical_columns:
             self.categorical_plots[f"{col}_bar_plot"] = get_column_plot(
@@ -255,6 +270,7 @@ class TabularMetrics:
             # Compute the Gower distance
             gower_distance = gower.gower_matrix(table)
 
+            # Keep Real-synthethic distances
             gower_distance = gower_distance[:offset, offset:]
 
             min_index = np.unravel_index(np.argmin(gower_distance, axis=None), gower_distance.shape)

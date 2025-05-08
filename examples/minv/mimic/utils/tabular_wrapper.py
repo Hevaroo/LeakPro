@@ -2,6 +2,7 @@ from pytorch_tabular import TabularModel
 import cupy as cp
 import torch
 import numpy as np
+import pandas as pd
 
 class TabularWrapper(TabularModel):
     """Wrapper class for Tabular Model."""
@@ -13,7 +14,7 @@ class TabularWrapper(TabularModel):
         
     def __call__(self, entry):
         """Make the model callable with PyTorch tensors."""
-               # Convert the DataFrame into a dataloader (pytorch_tabular handles formatting)
+        # Convert the DataFrame into a dataloader (pytorch_tabular handles formatting)
         inference_dataloader = self.datamodule.prepare_inference_dataloader(entry)
 
         all_logits = []  # List to collect logits

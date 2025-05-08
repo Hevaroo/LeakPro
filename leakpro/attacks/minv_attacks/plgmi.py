@@ -296,10 +296,13 @@ class AttackPLGMI(AbstractMINV):
                 self.num_classes,
             )
             # Get random labels
-            labels = torch.randint(0, num_unique_categories, (num_audited_classes,)).to(self.device)
+            #labels = torch.randint(0, num_unique_categories, (num_audited_classes,)).to(self.device)
+            labels = torch.arange(num_unique_categories).to(self.device)
+
         else:
             # Get random labels
-            labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
+            #labels = torch.randint(0, self.num_classes, (num_audited_classes,)).to(self.device)
+            labels = torch.arange(num_audited_classes).to(self.device)
 
         # Get range of labels from 0 to num_audited_classes
         #labels = torch.arange(num_audited_classes).to(self.device)
@@ -383,13 +386,14 @@ class AttackPLGMI(AbstractMINV):
                 return x
 
         logger.info("Optimizing z for the PLG-MI attack")
+        z = torch.randn(bs, self.generator.dim_z, device=self.device)
+        z.requires_grad = False
 
-        z = torch.randn(bs, self.generator.dim_z, device=self.device, requires_grad=True)
-        z.requires_grad = True
-
-        optimizer = torch.optim.Adam([z], lr=self.configs.z_optimization_lr)
+        #optimizer = torch.optim.Adam([z], lr=self.configs.z_optimization_lr)
         min_loss = 1e6
+
         for i in range(iter_times):
+            z = torch.randn(bs, self.generator.dim_z, device=self.device)
             # Generate fake images
             fake = self.generator(z, y)
 
@@ -399,24 +403,26 @@ class AttackPLGMI(AbstractMINV):
                 fake = fake.drop(columns=["pseudo_label"])
 
             out1 = self.target_model(aug_list(fake))
-            out2 = self.target_model(aug_list(fake))
-            # compute the loss
+            #out2 = self.target_model(aug_list(fake))
 
-            inv_loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
+            # if z.grad is not None:
+            #     z.grad.data.zero_()
+
+            # Compute inversion loss
+            inv_loss = F.cross_entropy(out1, y) #+ F.cross_entropy(out2, y)
 
             if inv_loss < min_loss:
                 min_loss = inv_loss
                 # Save the best z
                 best_z = z.clone()
 
-            if z.grad is not None:
-                z.grad.data.zero_()
-
             # Update the latent vector z
-            optimizer.zero_grad()
-            inv_loss.backward()
-            optimizer.step()
+            # print("Before backward:", z.grad)
+            # optimizer.zero_grad()
+            # inv_loss.backward()
+            # optimizer.step()
 
+            # print("After backward:", z.grad)
             inv_loss_val = inv_loss.item()
 
             if (i + 1) % self.log_interval == 0:
@@ -446,6 +452,10 @@ class AttackPLGMI(AbstractMINV):
         y = y.view(-1).long().to(self.device)
         self.generator.eval()
         self.generator.to(self.device)
+        self.target_model.eval()
+        self.target_model.to(self.device)
+        self.evaluation_model.eval()
+        self.evaluation_model.to(self.device)
 
 
         # Use Optuna for Bayesian optimization
@@ -458,13 +468,10 @@ class AttackPLGMI(AbstractMINV):
 
             fake = self.generator(z_tensor, y)
             fake = fake.drop(columns=["pseudo_label"])  # Remove pseudo_label
+            out1 = self.target_model(fake)
 
-            out1 = self.target_model.predict_proba(fake)  # Get class probabilities from XGBoost
-            y_one_hot = torch.nn.functional.one_hot(y, num_classes=out1.shape[1]).float().cpu().numpy()
-
-            # Compute cross-entropy loss manually
-            eps = 1e-8  # Prevent log(0)
-            return -np.sum(y_one_hot * np.log(out1 + eps)) / bs
+            # Cross entropy
+            return F.cross_entropy(out1, y)
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         study = optuna.create_study(direction="minimize")
