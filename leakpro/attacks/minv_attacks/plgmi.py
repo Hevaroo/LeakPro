@@ -447,8 +447,8 @@ class AttackPLGMI(AbstractMINV):
             activated = self.generator.call2(z, y)                         # Tensor (bs×D_transformed)
             fake_tensor, col_names = self.generator.inverse_transform_tensor_torch(activated)
             wrapper = DataFrameTensorWrapper(fake_tensor, col_names)
-            out1 = self.target_model(wrapper)
-            out2 = self.target_model(wrapper)
+            out1 = self.target_model.call2(wrapper)
+            out2 = self.target_model.call2(wrapper)
             loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
             if loss < best_loss:
                 best_loss, best_z = loss, z.clone()
@@ -461,7 +461,7 @@ class AttackPLGMI(AbstractMINV):
 
             if (i + 1) % self.log_interval == 0:
                 with torch.no_grad():
-                    eval_prob = self.evaluation_model(wrapper)
+                    eval_prob = self.evaluation_model.call2(wrapper)
                     eval_iden = torch.argmax(eval_prob, dim=1).view(-1)
                     acc = y.eq(eval_iden.long()).sum().item() * 1.0 / bs
                     logger.info("Iteration:{}\tInv Loss:{:.2f}\tAttack Acc:{:.2f}".format(i + 1, inv_loss_val, acc))
