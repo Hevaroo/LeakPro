@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from torch.nn import functional as F  # noqa: N812
 from torch.utils.data import DataLoader
 
+from examples.minv.mimic.utils.CTGAN_extended import DataFrameTensorWrapper
 from leakpro.attacks.minv_attacks.abstract_minv import AbstractMINV
 from leakpro.attacks.utils import gan_losses
 from leakpro.attacks.utils.gan_handler import GANHandler
@@ -333,7 +334,7 @@ class AttackPLGMI(AbstractMINV):
                 opt_z = self.optimize_z_no_grad(y=labels,
                                 iter_times=self.configs.z_optimization_iter)
             elif self.handler.configs.target.model_type == "pytorch_tabular":
-                opt_z = self.optimize_z_grad(y=labels,
+                opt_z = self.optimize_z_grad2(y=labels,
                                 iter_times=self.configs.z_optimization_iter, augment=False)
 
             metrics = TabularMetrics(self.handler, self.gan_handler,
@@ -422,6 +423,45 @@ class AttackPLGMI(AbstractMINV):
             if (i + 1) % self.log_interval == 0:
                 with torch.no_grad():
                     eval_prob = self.evaluation_model(fake)
+                    eval_iden = torch.argmax(eval_prob, dim=1).view(-1)
+                    acc = y.eq(eval_iden.long()).sum().item() * 1.0 / bs
+                    logger.info("Iteration:{}\tInv Loss:{:.2f}\tAttack Acc:{:.2f}".format(i + 1, inv_loss_val, acc))
+
+        return best_z
+
+    def optimize_z_grad2(self, y: torch.Tensor, iter_times: int = 10, augment: bool = True):
+        bs = y.size(0)
+        y  = y.view(-1).long().to(self.device)
+
+        self.generator.eval()
+        self.target_model.eval()
+
+        logger.info("Optimizing z for the PLG-MI attack")
+
+        best_z, best_loss = None, float('inf')
+        z = torch.randn(bs, self.generator.dim_z, device=self.device, requires_grad=True)
+        opt = torch.optim.Adam([z], lr=self.configs.z_optimization_lr)
+
+        for i in range(iter_times):
+            # 1) GAN → raw tensor + column list
+            activated = self.generator.call2(z, y)                         # Tensor (bs×D_transformed)
+            fake_tensor, col_names = self.generator.inverse_transform_tensor_torch(activated)
+            wrapper = DataFrameTensorWrapper(fake_tensor, col_names)
+            out1 = self.target_model(wrapper)
+            out2 = self.target_model(wrapper)
+            loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
+            if loss < best_loss:
+                best_loss, best_z = loss, z.clone()
+
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+
+            inv_loss_val = loss.item()
+
+            if (i + 1) % self.log_interval == 0:
+                with torch.no_grad():
+                    eval_prob = self.evaluation_model(wrapper)
                     eval_iden = torch.argmax(eval_prob, dim=1).view(-1)
                     acc = y.eq(eval_iden.long()).sum().item() * 1.0 / bs
                     logger.info("Iteration:{}\tInv Loss:{:.2f}\tAttack Acc:{:.2f}".format(i + 1, inv_loss_val, acc))

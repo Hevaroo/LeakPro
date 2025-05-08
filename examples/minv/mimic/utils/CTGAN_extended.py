@@ -11,6 +11,11 @@ import warnings
 from tqdm import tqdm
 from torch import cuda, device
 
+from rdt.transformers import GaussianNormalizer, ClusterBasedNormalizer
+
+
+from typing import Optional, Tuple, List
+
 class CustomCTGAN(CTGAN):
     def __init__(self, 
                  embedding_dim=256, 
@@ -48,6 +53,138 @@ class CustomCTGAN(CTGAN):
     
     def eval(self):
         self._generator.eval()
+        
+    def inverse_transform_tensor_torch(
+        self,
+        data: torch.Tensor
+    ) -> Tuple[torch.Tensor, List[str]]:
+        """
+        Invert each column purely in torch. Handles both GaussianNormalizer
+        and ClusterBasedNormalizer, plus straight-through for one-hot discrete.
+        """
+        device = data.device
+        st = 0
+        chunks: List[torch.Tensor] = []
+        col_names: List[str]   = []
+
+        for info in self._transformer._column_transform_info_list:
+            dim   = info.output_dimensions
+            chunk = data[:, st:st + dim]           # (bs × dim_transformed)
+
+            if info.column_type == "continuous":
+                trans = info.transform
+                #print(trans.__class__.__name__, dir(trans))
+
+
+                if isinstance(trans, GaussianNormalizer):
+                    # x_norm = (x_raw - μ)/σ  =>  x_raw = x_norm * σ + μ
+                    μ = torch.tensor(trans.mean_, device=device)
+                    σ = torch.tensor(trans.std_,  device=device)
+                    raw = chunk[:, 0] * σ + μ
+                    out = raw.unsqueeze(1)
+
+                elif isinstance(trans, ClusterBasedNormalizer):
+                    # Grab the fitted mixture model
+                    bgm = trans._bgm_transformer   # scikit‐learn BayesianGaussianMixture
+
+                    # Build torch tensors of shape (n_clusters,)
+                    centers_np = bgm.means_.reshape(-1)                   # (n_clusters,)
+                    stds_np    = np.sqrt(bgm.covariances_.reshape(-1))   # (n_clusters,)
+                    centers    = torch.tensor(centers_np, device=device)
+                    stds       = torch.tensor(stds_np,    device=device)
+
+                    # chunk: (bs, 1 + n_clusters) → first col is residual, rest are cluster logits
+                    resid = chunk[:, 0]                # (bs,)
+                    probs = chunk[:, 1:]               # (bs, n_clusters)
+                    k     = probs.argmax(dim=1)        # (bs,)  — correct integer IDs
+
+                    # Invert: raw = resid * std[k] + center[k]
+                    raw = resid * stds[k] + centers[k] # (bs,)
+                    out = raw.unsqueeze(1)             # (bs,1)
+
+                else:
+                    raise NotImplementedError(
+                        f"Pure-torch reverse not implemented for {trans.__class__}"
+                    )
+
+            else:
+                # discrete: chunk is (bs × n_cats) of log-probs
+                # straight-through argmax → hard one-hot → idx
+                p       = chunk
+                idx     = p.argmax(dim=1)                     # (bs,)
+                one_hot = F.one_hot(idx, num_classes=dim).float()
+                hard    = (one_hot - p).detach() + p          # ST-estimator
+                out     = idx.unsqueeze(1).float()            # feed idx downstream
+
+            chunks.append(out)
+
+            names = info.column_name if isinstance(info.column_name, list) else [info.column_name]
+            col_names.extend(names)
+
+            st += dim
+
+        recovered = torch.cat(chunks, dim=1)  # (bs × D_raw)
+        return recovered, col_names
+        
+    
+    def softmax_activate(self, data):
+        """Apply proper activation function to the output of the generator."""
+        data_t = []
+        st = 0
+        for column_info in self._transformer.output_info_list:
+            for span_info in column_info:
+                if span_info.activation_fn == 'tanh':
+                    ed = st + span_info.dim
+                    data_t.append(torch.tanh(data[:, st:ed]))
+                    st = ed
+                elif span_info.activation_fn == 'softmax':
+                    ed = st + span_info.dim
+                    transformed = F.log_softmax(data[:, st:ed])
+                    data_t.append(transformed)
+                    st = ed
+                else:
+                    raise ValueError(f'Unexpected activation function {span_info.activation_fn}.')
+
+        return torch.cat(data_t, dim=1)
+    
+    def call2(self, z=None, y=None):
+        if self._transformer is None:
+            raise ValueError("The transformer has not been initialized. Please call the `fit` method first.")
+    
+        if y is not None:
+            # TODO: If desired, support for conditioning on other discrete 
+            # columns than pseudo-labels can be implemented here for correct sampling.
+
+            # Batch size is length of y
+            bs = y.shape[0]
+            condition_values = y.detach().cpu().numpy()
+        
+            discrete_column_id = np.array([self._data_sampler._n_discrete_columns-1]*bs)
+            cond = np.zeros((bs, self._data_sampler._n_categories), dtype='float32')
+            category_id = self._data_sampler._discrete_column_cond_st[discrete_column_id] + condition_values
+            cond[np.arange(bs), category_id] = 1
+            c1 = cond
+            
+        else:
+            bs = z.shape[0]
+            c1 = self._data_sampler.sample_original_condvec(bs)
+
+        c1 = torch.from_numpy(c1).to(self._device)
+        
+        if z is None:
+            mean = torch.zeros(bs, self._embedding_dim)
+            std = mean + 1
+            fakez = torch.normal(mean=mean, std=std).to(self._device)
+        else:
+            fakez = z
+        
+        
+        fakez = torch.cat([z, c1], dim=1)
+
+        fake = self._generator(fakez)
+        fakeact = self.softmax_activate(fake)
+        return fakeact
+        
         
     def __call__(self, z=None, y=None):
         """Sample data similar to the training data.
@@ -101,7 +238,7 @@ class CustomCTGAN(CTGAN):
         fakez = torch.cat([z, c1], dim=1)
 
         fake = self._generator(fakez)
-        fakeact = self._apply_activate(fake)
+        fakeact = self.softmax_activate(fake)
 
         samples = self._transformer.inverse_transform(fakeact.detach().cpu().numpy())
 
@@ -408,4 +545,28 @@ class CustomCTGAN(CTGAN):
                     description.format(gen=generator_loss, dis=discriminator_loss, inv=inversion_loss,c_loss=cross_entropy, acc=acc)
                 )
             
-        
+
+class DataFrameTensorWrapper:
+    """Pretend to be a DataFrame but hold a torch.Tensor + column names."""
+    def __init__(self, tensor: torch.Tensor, columns: list[str]):
+        self.tensor  = tensor
+        self.columns = columns
+    def copy(self):
+        return self  # pandas .copy() is a no-op
+    def __getitem__(self, key):
+        idx = self.columns.index(key)
+        return self.tensor[:, idx]
+    def __len__(self):
+        return self.tensor.size(0)
+
+class DataLoaderTensorWrapper:
+    """Yield dicts of column→tensor slices, no numpy/pandas involved."""
+    def __init__(self, wrapper: DataFrameTensorWrapper, batch_size: int):
+        self.tw, self.bs = wrapper, batch_size
+    def __iter__(self):
+        total = len(self.tw)
+        for start in range(0, total, self.bs):
+            chunk = self.tw.tensor[start : start + self.bs]
+            yield { col: chunk[:, i] for i, col in enumerate(self.tw.columns) }
+    def __len__(self):
+        return (len(self.tw) + self.bs - 1) // self.bs
