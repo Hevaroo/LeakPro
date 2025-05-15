@@ -31,6 +31,10 @@ class TabularWrapper(TabularModel):
     def __call__(self, entry):
         """Make the model callable with PyTorch tensors."""
                # Convert the DataFrame into a dataloader (pytorch_tabular handles formatting)
+               
+        if not self.loaded:
+            self.load_dl()
+            self.loaded = True
         inference_dataloader = self.datamodule.prepare_inference_dataloader(entry)
 
         all_logits = []  # List to collect logits

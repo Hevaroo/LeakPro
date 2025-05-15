@@ -1,5 +1,6 @@
 import pandas as pd
 
+import yaml
 
 path = "data/physionet.org/files/mimiciv/3.1/"
 
@@ -127,7 +128,16 @@ df = df.merge(emar_encoded, on='hadm_id', how='left')
 #df = pd.get_dummies(df, columns=categorical_features)
 
 # Label encode ICD codes (Multi-class classification)
-df['icd_code'] = df['icd_code'].astype('category').cat.codes
+
+df['icd_code'] = df['icd_code'].astype('category')
+encoding_mapping = dict(enumerate(df['icd_code'].cat.categories))
+
+# Save encoding mapping to a YAML file
+with open('icd_code_encodings.yaml', 'w') as file:
+    yaml.dump(encoding_mapping, file)
+
+# Apply encoding
+df['icd_code'] = df['icd_code'].cat.codes
 
 # Extract features and labels
 X = df.drop(columns=['hadm_id', 'icd_code'])  # Features

@@ -335,14 +335,29 @@ class AttackPLGMI(AbstractMINV):
                                 iter_times=self.configs.z_optimization_iter)
             elif self.handler.configs.target.model_type == "pytorch_tabular":
                 opt_z = self.optimize_z_grad2(y=labels,
-                                iter_times=self.configs.z_optimization_iter, augment=False)
-
-            metrics = TabularMetrics(self.handler, self.gan_handler,
+                                iter_times=1, augment=False)
+                logger.info("Random z")
+                metrics1 = TabularMetrics(self.handler, self.gan_handler,
                                         reconstruction_configs,
                                         labels=labels,
                                         z=opt_z)
 
-        return metrics
+                opt_z = self.optimize_z_grad2(y=labels,
+                                iter_times=self.configs.z_optimization_iter, augment=False)
+                logger.info("Gradient optimization of z 10")
+                metrics2 = TabularMetrics(self.handler, self.gan_handler,
+                                        reconstruction_configs,
+                                        labels=labels,
+                                        z=opt_z)
+                bayesian_z = self.optimize_z_no_grad(y=labels,
+                                iter_times=50)
+                logger.info("Bayesian z")
+                metrics3 = TabularMetrics(self.handler, self.gan_handler,
+                                        reconstruction_configs,
+                                        labels=labels,
+                                        z=bayesian_z)
+
+        return metrics1
 
     def optimize_z_grad(self:Self,
                    y: torch.tensor,
@@ -448,8 +463,9 @@ class AttackPLGMI(AbstractMINV):
             fake_tensor, col_names = self.generator.inverse_transform_tensor_torch(activated)
             wrapper = DataFrameTensorWrapper(fake_tensor, col_names)
             out1 = self.target_model.call2(wrapper)
-            out2 = self.target_model.call2(wrapper)
-            loss = F.cross_entropy(out1, y) + F.cross_entropy(out2, y)
+            #loss = gan_losses.max_margin_loss(out1, y)
+            #out2 = self.target_model.call2(wrapper)
+            loss = F.cross_entropy(out1, y) #+ F.cross_entropy(out2, y)
             if loss < best_loss:
                 best_loss, best_z = loss, z.clone()
 
@@ -461,13 +477,23 @@ class AttackPLGMI(AbstractMINV):
 
             if (i + 1) % self.log_interval == 0:
                 with torch.no_grad():
+
+                    #activated = self.generator.call2(z, y)                         # Tensor (bs×D_transformed)
+                    #fake_tensor, col_names = self.generator.inverse_transform_tensor_torch(activated)
+                    #wrapper = DataFrameTensorWrapper(fake_tensor, col_names)
+                    #out1 = self.target_model.call2(wrapper)
                     fake = self.generator(z, y)
                     eval_prob = self.evaluation_model(fake)
+
+                    #logger.info(f"out1: {torch.argmax(out1, dim=1).view(-1)}")
                     eval_iden = torch.argmax(eval_prob, dim=1).view(-1)
+                    #logger.info(f"eval_iden: {eval_iden}")
                     acc = y.eq(eval_iden.long()).sum().item() * 1.0 / bs
                     logger.info("Iteration:{}\tInv Loss:{:.2f}\tAttack Acc:{:.2f}".format(i + 1, inv_loss_val, acc))
 
-        return best_z
+
+
+        return z
 
     def optimize_z_no_grad(self, y: torch.tensor, iter_times: int = 10) -> torch.tensor:
         """Find the optimal latent vectors z for labels y.
@@ -487,6 +513,10 @@ class AttackPLGMI(AbstractMINV):
         y = y.view(-1).long().to(self.device)
         self.generator.eval()
         self.generator.to(self.device)
+        self.target_model.eval()
+        self.target_model.to(self.device)
+        self.evaluation_model.eval()
+        self.evaluation_model.to(self.device)
 
 
         # Use Optuna for Bayesian optimization
@@ -499,13 +529,10 @@ class AttackPLGMI(AbstractMINV):
 
             fake = self.generator(z_tensor, y)
             fake = fake.drop(columns=["pseudo_label"])  # Remove pseudo_label
+            out1 = self.target_model(fake)
 
-            out1 = self.target_model.predict_proba(fake)  # Get class probabilities from XGBoost
-            y_one_hot = torch.nn.functional.one_hot(y, num_classes=out1.shape[1]).float().cpu().numpy()
-
-            # Compute cross-entropy loss manually
-            eps = 1e-8  # Prevent log(0)
-            return -np.sum(y_one_hot * np.log(out1 + eps)) / bs
+            # Cross entropy
+            return F.cross_entropy(out1, y)
 
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         study = optuna.create_study(direction="minimize")
