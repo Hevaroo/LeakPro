@@ -8,3 +8,6 @@ target/*
 lightning_logs/*
 saved_models/*
 *.pkl
+
+audit_id*
+target*/
